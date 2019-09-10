@@ -16,17 +16,20 @@ import os
 import glob
 
 # Initialization of directory information:
-this_dir = os.getcwd() + '/'
-data_dir = '/Users/cgratton/Box/DATA/iNetworks/Nifti/'
-out_dir_top = '/Users/cgratton/Desktop/derivatives/preproc_afni/' # for now put on desktop so I can make needed simlinks
-afni_dir = '/Users/cgratton/abin/'
+# EDIT AS NEEDED
+#this_dir = os.getcwd() + '/'
+data_dir = '/Users/cgratton/Box/DATA/iNetworks/Nifti/' # location of the nifti input data
+afni_dir = '/Users/cgratton/abin/' #needs to be downloaded and installed
+out_dir_top = '/Users/cgratton/Desktop/derivatives/preproc_afni/' # location to put output; for now put on desktop so I can make needed simlinks (doesn't work with Box)
 if not os.path.exists(out_dir_top):
     os.mkdir(out_dir_top)
-
+script_dir = out_dir_top + 'proc_scripts/' #location to put afni_proc scripts
+if not os.path.exists(script_dir):
+    os.mkdir(script_dir)
 
 # Things to run (for now here, eventually read as inputs/from a params file)
 subs = ['INET003']
-sess = [1,2]
+sess = [1]
 #tasks = ['rest'] # do all tasks and runs available
 #runs = [1,2]
 
@@ -52,8 +55,7 @@ for sub in subs:
                                    +'_ses-' + str(ses) + '*.nii.gz')
         for af in anat_files:
             afpath, affile = os.path.split(af)
-            # Box can't simlink? eventually try to switch this to ln -s
-            cmd = 'ln -s %s %s%s' %(af,sub_dir_in_anat,affile)
+            cmd = 'ln -s %s %s%s' %(af,sub_dir_in_anat,affile) # Box can't simlink - switch to cp if needed
             os.system(cmd)
 
     # functional inputs
@@ -65,11 +67,11 @@ for sub in subs:
         ses_dir_out = sub_dir_out + 'ses-' + str(ses) + '/'
         if os.path.exists(ses_dir_out): # in this case, remove previous instances of this directory
             os.system('rm -rf %s' %(ses_dir_out))
-        os.mkdir(ses_dir_out)
+        #os.mkdir(ses_dir_out)
 
         # now write out afni command
         afni_command = 'python ' + afni_dir + 'afni_proc.py -subj_id ' + sub_name + ' \
-        -script ' + ses_dir_out + 'proc.preprocAFNI.sub-' + sub_name + '.sess-' + str(ses) + ' \
+        -script ' + script_dir + 'proc.preprocAFNI.sub-' + sub_name + '.sess-' + str(ses) + ' \
         -scr_overwrite -out_dir ' + ses_dir_out + ' \
         -blocks despike align tlrc volreg mask scale \
         -copy_anat ' + sub_dir_in_anat + '*_T1w_2.nii.gz -tcat_remove_first_trs 0 \
@@ -82,10 +84,10 @@ for sub in subs:
 
         print(afni_command)
         os.system(afni_command)
-        1/0
 
         # run output file
-        os.system('./' + ses_dir_out + 'proc.preprocAFNI.sub-' + sub_name + '.sess-' + str(ses))
+        os.system('tcsh -xef ' + script_dir + 'proc.preprocAFNI.sub-' + sub_name + '.sess-' + str(ses) +
+                      ' 2>&1 | tee ' + script_dir + 'output.proc.preprocAFNI.sub-' + sub_name + '.sess-' + str(ses))
 
         # FOR ME:
         # 1. need to think about how we want to do alignment
