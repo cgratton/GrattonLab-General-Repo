@@ -17,6 +17,7 @@ import numpy as np
 
 # Initialization of directory information:
 # EDIT AS NEEDED
+# making a test change
 top_dir = '~/Box/DATA/iNetworks' # project directory
 dcm2nii_dir = '~/Desktop/MRIcroGL' #needs to be downloaded
 dicom_dir = top_dir + '/Dicom' # should already exist
