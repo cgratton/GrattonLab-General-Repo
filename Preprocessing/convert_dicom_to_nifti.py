@@ -17,22 +17,22 @@ import numpy as np
 
 # Initialization of directory information:
 # EDIT AS NEEDED
-top_dir = '/Users/cgratton/Box/DATA/iNetworks' # project directory
-dcm2nii_dir = '/Users/cgratton/Desktop/MRIcroGL' #needs to be downloaded
+top_dir = '~/Box/DATA/iNetworks' # project directory
+dcm2nii_dir = '~/Desktop/MRIcroGL' #needs to be downloaded
 dicom_dir = top_dir + '/Dicom' # should already exist
 nifti_dir = top_dir + '/Nifti' # will likely need to be made
 if not os.path.exists(nifti_dir):
     os.mkdir(nifti_dir)
 
 # some constants (make this something to read in from a params file?)
-subs = ['INET001'] #['INET001']
-sess = np.arange(3,6) #np.arange(1,6) #1-5 in python counts
+subs = ['INET006'] #['INET001']
+sess = np.arange(4) #np.arange(1,6) #1-5 in python counts
 
 # what to do:
-convert_anat = False
+convert_anat = True
 convert_func = True
-convert_fmap = False
-convert_physio = False # not sure how to do this yet
+convert_fmap = True
+convert_physio = True # not sure how to do this yet
     
 # If this is the first subject, create a dataset description file
 # os.system('jo -p "Name"="INetworks" "BIDSVersion"="1.0.2" >> %s/dataset_description.json')

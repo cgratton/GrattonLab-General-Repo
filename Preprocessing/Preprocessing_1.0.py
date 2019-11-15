@@ -18,9 +18,9 @@ import glob
 # Initialization of directory information:
 # EDIT AS NEEDED
 #this_dir = os.getcwd() + '/'
-data_dir = '/Users/cgratton/Box/DATA/iNetworks/Nifti/' # location of the nifti input data
-afni_dir = '/Users/cgratton/abin/' #needs to be downloaded and installed
-out_dir_top = '/Users/cgratton/Desktop/derivatives/preproc_afni/' # location to put output; for now put on desktop so I can make needed simlinks (doesn't work with Box)
+data_dir = '~/Box/DATA/iNetworks/Nifti/' # location of the nifti input data
+afni_dir = '~/abin/' #needs to be downloaded and installed
+out_dir_top = '~/Desktop/derivatives/preproc_afni/' # location to put output; for now put on desktop so I can make needed simlinks (doesn't work with Box)
 if not os.path.exists(out_dir_top):
     os.mkdir(out_dir_top)
 script_dir = out_dir_top + 'proc_scripts/' #location to put afni_proc scripts
@@ -28,10 +28,8 @@ if not os.path.exists(script_dir):
     os.mkdir(script_dir)
 
 # Things to run (for now here, eventually read as inputs/from a params file)
-subs = ['INET003']
-sess = [1]
-#tasks = ['rest'] # do all tasks and runs available
-#runs = [1,2]
+subs = ['INET006']
+sess = [1,2,3,4]
 
 # loop through subjects
 for sub in subs:
