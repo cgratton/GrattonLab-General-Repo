@@ -70,7 +70,7 @@ for i = 1:length(infiles)
     
     % some stats to keep track of
     good_run_FD(i) = sum(tmask_FD) > run_min;
-    good_run_fFD(i) = sum(fmask_fFD) > run_min;
+    good_run_fFD(i) = sum(tmask_fFD) > run_min;
     run_frame_nums_FD(i) = sum(tmask_FD);
     run_frame_nums_fFD(i) = sum(tmask_fFD);
     run_frame_per_FD(i) = sum(tmask_FD)./numel(tmask_FD);
@@ -84,11 +84,11 @@ end
 save(sprintf('%sgoodruns_FD.txt',outdir,i),'good_run_FD');
 save(sprintf('%sgoodruns_fFD.txt',outdir,i),'good_run_fFD');
 
-save(sprintf('%sframenums_FD.txt',outdir,i),'framenums_FD');
-save(sprintf('%sframenums_fFD.txt',outdir,i),'framenums_fFD');
+save(sprintf('%sframenums_FD.txt',outdir,i),'run_frame_nums_FD');
+save(sprintf('%sframenums_fFD.txt',outdir,i),'run_frame_nums_fFD');
 
-save(sprintf('%sframepers_FD.txt',outdir,i),'framenums_FD');
-save(sprintf('%sframepers_fFD.txt',outdir,i),'framenums_fFD');
+save(sprintf('%sframepers_FD.txt',outdir,i),'run_frame_per_FD');
+save(sprintf('%sframepers_fFD.txt',outdir,i),'run_frame_per_fFD');
 
 
 end
