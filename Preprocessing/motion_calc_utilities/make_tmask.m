@@ -20,7 +20,7 @@ mask2 = mask1;
 
 [chunksize startnums endnums] = maskgaps(~mask1);
 goodsize=endnums-startnums+1;
-goodlost=goodsize<=snipsz;
+goodlost=goodsize<snipsz;
 for j=1:numel(goodlost)
     if goodlost(j)
         mask2(startnums(j):endnums(j))=0;
