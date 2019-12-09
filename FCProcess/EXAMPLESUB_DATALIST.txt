@@ -1,0 +1,4 @@
+INET003	1	rest	 1.1	0	afni_pb03.tcat.despike.scale.volreg.MNI333	/projects/b1081/iNetworks/Nifti/derivatives/preproc_afni/sub-INET003/	fcparams
+INET003	2	rest	 1.1	0	afni_pb03.tcat.despike.scale.volreg.MNI333 	/projects/b1081/iNetworks/Nifti/derivatives/preproc_afni/sub-INET003/	fcparams
+INET003	3	rest	 1.1	0	afni_pb03.tcat.despike.scale.volreg.MNI333 	/projects/b1081/iNetworks/Nifti/derivatives/preproc_afni/sub-INET003/	fcparams	
+INET003	4	rest	 1.1	0	afni_pb03.tcat.despike.scale.volreg.MNI333 	/projects/b1081/iNetworks/Nifti/derivatives/preproc_afni/sub-INET003/	fcparams	
