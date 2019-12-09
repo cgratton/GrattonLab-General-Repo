@@ -1,43 +1,46 @@
-function [allends switches] = FCPROCESS_MSC_task(datafile,tdir,tmasktype,cleanup,roilist,subid,task,varargin)
-
-% jdp 2/22/2012
+function [allends switches] = FCPROCESS_iNetworks(datafile,tdir,tmasktype,freesurferlist,varargin)
+% This script is the fcprocessing script, originally from the Petersen
+% lab, now for the Gratton lab.
+% FCPROCESS(datalist,targetdir,tmasktype,freesurferlist)
+% initial proc: FCPROCESS('datalist.txt','/put/data/here/','ones','fsinfo.txt');
+% final proc:   FCPROCESS('datalist.txt','/put/data/here/','specificmasks.txt','fsinfo.txt');
 %
+% The datalist specifies the data to process, and is a 8-column file:
+% subid sessid condid TR skipframes preprocstr srcdir prmsfile
+% e.g.:
+% INET001 1 rest 1.1 0 afni_pb03.tcat.despike.scale.volreg /projects/iNetworks/Nifti/derivatives/preproc_afni/ fcparams
+% INET001 2 rest 1.1 0 afni_pb03.tcat.despike.scale.volreg /projects/iNetworks/Nifti/derivatives/preproc_afni/ fcparams
+%
+% We presume the file structure for fMRI data:
+% /srcdir
+%   /subid
+%       /sesid
+%           subid_ses-sesid_task-taskid_run-runnum_preprocstr.nii
+%           ...
+%           subid_ses-sesid_task-taskid.fcparams
+%       /anat_ses-all
+%
+% Where the bold# for runs to analyze are specified in the prmfile, which
+% contains the single line:
+% set boldruns = (X Y whatever the bold run numbers are)
+% e.g: set boldruns = (2 4 6)
+%
+% The srcdir needs to be a hard path, and prmfile is assumed to be in the
+% sesid directory
+%
+% The TR is obvious, and the skipframes are the number of frames to skip at
+% the beginning of each run (we typically set this to 0 now and remove later, but other common settings include: 5 frames, 30 seconds).
+%
+% targetdir: where to write files to (e.g., '/projects/iNetworks/Nifti/derivatives/FCProcess_initial/INET001/ses-1_task-rest/')
 % IMPORTANT: fcp_process removes the /newtargetdir/vcdir/ folder when it
 % begins processing a subject, so DO NOT set the targetdir to the directory
 % where your 333 BOLD data exist - use a new directory, specific to FC
 % data. Since fcp_initial_process is a wrapper for fcp_process, this goes
 % for that script too.
 %
-% This script is the fcprocessing script for the Petersen lab.
-%
-% The datalist specifies the data to process, and is a 5-column file:
-% srcdir vcnum prmfile TR skipframes
-% e.g.:
-% /data/src/ vc11111 /data/prms/vc11111.prm 2.5 5
-% /data/src/ vc22222 /data/prms/vc22222.prm 2.2 5
-%
-% We presume the file structure for fMRI data:
-% /srcdir
-%   /vcnum
-%     /boldX
-%     /boldY
-%     /atlas
-%
-% Where the bold# for resting runs are specified in the prmfile, which
-% contains the single line:
-% set boldruns = (X Y whatever the bold run numbers are)
-% e.g: set boldruns = (2 4 6)
-%
-% The srcdir and prmfile need to be hard paths
-%
-% The TR is obvious, and the skipframes are the number of frames to skip at
-% the beginning of each run (5 is generous but common).
-%
-% targetdir: where to write files to
 % tmasktype can be one of two things:
 %     'ones' - just skips the skipframes at the start of each run
-%     tmasklist - a tmasklist from COHORTSELECOR.m
-% cleanup: delete all files but QC files and final fcimage (0=no. 1=yes)
+%     tmasklist - a tmasklist from COHORTSELECTOR.m
 % freesurferlist: a file with 2 columns, the first the subject ID, the second
 % 	where the freesurfer segmentation exists that was used for MAKE_FS_MASKS.csh
 % e.g.,
@@ -48,59 +51,65 @@ function [allends switches] = FCPROCESS_MSC_task(datafile,tdir,tmasktype,cleanup
 %    demean/detrend (mask)
 %    extract nuisance signals
 %    multiple regression (mask)
-%    *interpolate* (mask)
+%    *interpolate* (mask) %% this step takes a while
 %    temporal filter (butter1 filtfilt low-pass)
 %    demean/detrend (mask)
 %    spatial blur (gauss_4dfp)
 %
-%
-%
-% IMPORTANT: FCPROCESS removes the /newtargetdir/vcdir/ folder when it
-% begins processing a subject, so DO NOT set the newtargetdir to the directory
-% where your 333 BOLD data exist - use a new directory, specific to FC
-% data.
-%
-% FCPROCESS(datalist,targetdir,tmasktype,cleanup,roilist,freesurferlist)
-% FCPROCESS('datalist.txt','/put/data/here/','ones',1,'bigbrain264.txt','fsinfo.txt');
-% FCPROCESS('datalist.txt','/put/data/here/','specificmasks.txt',1,'fab5roiz.txt','fsinfo.txt');
-
-%%% CG: working off of T. Laumann's FCPROCESS_MSC.m version
-% Editing to work with task residuals data
-
-
-
-
+% originally written by: jdp 2/22/2012
+% CG 2017: working off of T. Laumann's FCPROCESS_MSC.m version Editing to work with task residuals data
+% CG 2019: editing to work at NU and with iNetworks data (rest)
 
 
 %% IMPORTANT VARIABLES
-avidir = '/data/cninds01/data2/nil-tools';
-releasedir = '/data/petsun4/data1/solaris';
-roidir='/home/usr/fidl/lib/';
+% % %avidir = '/data/cninds01/data2/nil-tools';  CG - get AFNI functions?
+% % %releasedir = '/data/petsun4/data1/solaris'; CG - get AFNI functions?
+% % %roidir='/home/usr/fidl/lib/'; CG - do we ever use this?
 startdir=pwd;
-FDoutlier=0.25; % flag frames over this
-GLMoutlierlim=2; % flag frames over this z-score of global signal
-GREYoutlierlim=2;
-voxdim='333';
+voxdim='333'; % make this an input? Add a resampling step to prep data to this res before?
 switches.WMero=4;
 switches.CSFero=1;
-set(0, 'DefaultFigureVisible', 'off');
+set(0, 'DefaultFigureVisible', 'off'); % puts figures in the background while running
 
-% [rois x y z] = textread(roilist,'%s%f%f%f');
-% roimasks = zeros(147456,size(rois,1));
-% %roimasks = zeros(147456,size(rois,1));
-% for i=1:size(rois,1)
-%     i
-%     roimasks_orig(:,i)=read_4dfpimg_HCP(rois{i,1});
-% end
-[rois] = textread(roilist,'%s');
-roimasks_orig = read_4dfpimg_HCP(rois{1});
-%[rois x y z] = textread(roilist,'%s%f%f%f');
-%for i=1:size(rois,1)
-%    roimasks_orig(:,i)=read_4dfpimg(rois{i,1});
-%end
 
-if length(varargin) > 1
-    switch varargin{2}
+%% CHECK THAT BASIC FILES ARE ACTUALLY THERE
+
+% read in the subject data including location, vcnum, and boldruns
+[df.filepath df.vcnum df.condition df.prmfile df.TR df.TRskip] = textread(datafile,'%s%s%s%f%d');
+fprintf('CHECKING THAT DATA EXIST\n');
+numvcs=size(df.vcnum,1);
+
+for i=1:numvcs
+    QC(i).vcnum=df.vcnum{i,1};
+    QC(i).condition = df.condition{i,1};
+    QC(i).TR=df.TR(i,1);
+    QC(i).TRskip=df.TRskip(i,1);
+end
+
+%% CHECK TEMPORAL MASKS
+fprintf('CHECKING TEMPORAL MASKS\n');
+switch tmasktype
+    case 'ones'
+    otherwise
+        [tm.vcnum tm.tmaskfiles]=textread(tmasktype,'%s%s');
+        if ~isequal(tm.vcnum,df.vcnum)
+            error('masklist vcnumbers do not match datalist vcnumbers');
+        end
+end
+
+
+%% READ IN FREESURFER
+if ~isempty(varargin)
+    [FSfile.vc FSfile.dir]=textread(varargin{1,1},'%s%s');
+end
+for i=1:numvcs
+    QC(i).fsdir=[FSfile.dir{1} '/' FSfile.vc{1}];
+end
+
+
+%% SET SWITCHES
+if length(varargin) > 0
+    switch varargin{1}
         case 'defaults2'
             switches.doregression=1;
             switches.regressiontype=1;
@@ -136,87 +145,13 @@ if length(varargin) > 1
     end
     plot_silent = 1;
 else
-    %%% end of add by CG
-    switches.doregression=0;
-    switches.regressiontype=1;
-    switches.motionestimates=1;
-    switches.WM=0;
-    switches.V=0;
-    switches.GS=0;
-    switches.dointerpolate=0;
-    switches.dobandpass=0;
-    switches.temporalfiltertype=3;
-    switches.lopasscutoff=0;
-    switches.hipasscutoff=0;
-    switches.order=0;
-    switches.doblur=0;
-    switches.blurkernel=0;
-end
-
-
-%% CHECK THAT BASIC FILES ARE ACTUALLY THERE
-
-% read in the subject data including location, vcnum, and boldruns
-[df.filepath df.vcnum df.prmfile df.TR df.TRskip] = textread(datafile,'%s%s%s%f%d');
-fprintf('CHECKING THAT DATA EXIST\n');
-pause(2);
-numsubs=size(df.vcnum,1);
-
-for i=1:numsubs
-    QC(i).vcnum=df.vcnum{i,1};
-    QC(i).TR=df.TR(i,1);
-    QC(i).TRskip=df.TRskip(i,1);
-end
-
-%% CHECK TEMPORAL MASKS
-fprintf('CHECKING TEMPORAL MASKS\n');
-switch tmasktype
-    case 'ones'
-    otherwise
-        [tm.vcnum tm.tmaskfiles]=textread(tmasktype,'%s%s');
-        if ~isequal(tm.vcnum,df.vcnum)
-            error('masklist vcnumbers do not match datalist vcnumbers');
-        end
-end
-
-
-%% READ IN FREESURFER
-if ~isempty(varargin)
-    [FSfile.vc FSfile.dir]=textread(varargin{1,1},'%s%s');
-end
-errorout=0;
-for i=1:numsubs
-    found=1;
-    %for j=1:length(FSfile.dir)
-    %if isequal(FSfile.vc{j,1},QC(i).vcnum) || isequal([FSfile.vc{j,1} '_2'],[QC(i).vcnum])
-    QC(i).fsdir=[FSfile.dir{1} '/' FSfile.vc{1}];
-    %  found=found+1;
-    % end
-    % end
-    %     if found==1
-    %     elseif found>1
-    %         errorout=1;
-    %         fprintf('%s has multiple matches to FSdirs\n',QC(i).vcnum);
-    %     elseif found<1
-    %         errorout=1;
-    %         fprintf('%s has zero matches to FSdirs\n',QC(i).vcnum);
-    %     end
-end
-% if errorout
-%     error();
-% end
-
-
-%% SET SWITCHES
-
-if length(varargin) < 2 %%% Added by CG
+    % get input from user
     needcorrectinput=1;
     while needcorrectinput
         switches.doregression=input('Do you want to regress nuisance signals? (1=y; 0=no): ');
         switch switches.doregression
             case 1
-                needcorrectinput=0;
-                
+                needcorrectinput=0;                
                 needcorrectinput2=1;
                 while needcorrectinput2
                     switches.regressiontype=input('Regression: 1 - Freesurfer seeds: ');
@@ -451,22 +386,18 @@ tic
 %% CHECK FOR PRESENCE OF STRUCTURAL AND BOLD FILES
 
 % CHECK FOR BOLD DATA
-for i=1:numsubs
+for i=1:numvcs
     fprintf('CHECKING BOLD RUNS\t%d\t%s\n',i,QC(i).vcnum);
     % determine which BOLD runs are rest runs
     clear tempruns; [trash tempruns] = system([ 'awk -F "(" ''{print$2}'' ' df.prmfile{i,1} ' | awk -F ")" ''{print $1}''' ]);
-    QC(i).restruns = strread(tempruns,'%s','delimiter',' ');
-    
+    QC(i).condition_runs = strread(tempruns,'%s','delimiter',' ');
     
     % cycle through each BOLD run
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).condition_runs,1)
         
         % set original data - CG: edit to point to residuals files
-        %boldmat{i,j} = cell2mat(strcat(df.filepath{i,1},'/',QC(i).vcnum,'/bold',QC(i).restruns(j,:),'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat'));
-        %boldimg{i,j} = cell2mat(strcat(df.filepath{i,1},'/',QC(i).vcnum,'/bold',QC(i).restruns(j,:),'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl.4dfp.img'));
-        %boldifh{i,j} = cell2mat(strcat(df.filepath{i,1},'/',QC(i).vcnum,'/bold',QC(i).restruns(j,:),'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl.4dfp.ifh'));
-        boldmat{i,j} = cell2mat(strcat(df.filepath{i,1},'/motion_params/',QC(i).vcnum,'_b',task,QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat'));
-        boldimg{i,j} = cell2mat(strcat(df.filepath{i,1},'/residuals/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.img'));
+        boldmat{i,j} = []; %cell2mat(strcat(df.filepath{i,1},'/motion_params/',QC(i).vcnum,'_b',task,QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat')); - EDIT
+        boldimg{i,j} = [df.filepath{i,1} QC(i).vcnum ]; %cell2mat(strcat(df.filepath{i,1},'/residuals/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.img'));
         boldifh{i,j} = cell2mat(strcat(df.filepath{i,1},'/residuals/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.ifh'));
         
         % check that original data is present
@@ -512,7 +443,7 @@ end
 fprintf('PREPARING OUTPUT DIRECTORIES\n');
 fprintf('LINKING BOLD DATA\n');
 pause(2);
-for i=1:numsubs
+for i=1:numvcs
     
     % prepare target subject directory
     QC(i).subdir=[tdir '/' QC(i).vcnum ];
@@ -576,7 +507,7 @@ LASTCONC{stage}= '333';
 allends='333';
 
 % initialize LASTIMG to the 333 image
-for i=1:numsubs
+for i=1:numvcs
     for j=1:size(QC(i).restruns,1)
         %CG: changing the way this works to actually load our image of interest
         %LASTIMG{i,j,stage}=cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl'));
@@ -606,7 +537,7 @@ end
 
 %% COMPUTE DEFINED VOXELS FOR THE BOLD RUNS
 
-for i=1:numsubs
+for i=1:numvcs
     cd(QC(i).subdir);
     fprintf('COMPUTE DEFINED VOXELS\t%d\t%s\n',i,QC(i).vcnum);
     %commands=['compute_defined_4dfp ' QC(i).subdir '/' LASTCONC{stage} '.conc >/dev/null' ];
@@ -692,7 +623,7 @@ switch switches.regressiontype
     case {0,1,9} % freesurfer masks of WM and V
         disp('hello')
         % set basic names
-        for i=1:numsubs
+        for i=1:numvcs
             QC(i).GLMmaskfile=['/data/cn4/laumannt/Standard/glm_atlas_mask_' voxdim '.4dfp.img'];
             QC(i).WMmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_cerebralwm_ero' num2str(switches.WMero) '_mask_' voxdim '.4dfp.img'];
             QC(i).CSFmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_CSF_ero' num2str(switches.CSFero) '_mask_' voxdim '.4dfp.img'];
@@ -701,7 +632,7 @@ switch switches.regressiontype
         end
         
         % check for existence of mask files
-        for i=1:numsubs
+        for i=1:numvcs
             fprintf('CHECKING NUISANCE SEEDS\t%d\t%s\n',i,QC(i).vcnum);
             needtostop=0;
             
@@ -736,7 +667,7 @@ switch switches.regressiontype
         end
         
         % ensure masks contain something, relax erosions if not
-        for i=1:numsubs
+        for i=1:numvcs
             needtostop=0;
             
             tmpmask=read_4dfpimg(QC(i).GLMmaskfile);
@@ -807,7 +738,7 @@ switch switches.regressiontype
         end
         
         % create a holding variable for seeds and labels
-        for i=1:numsubs
+        for i=1:numvcs
             seedcount=0;
             QC(i).seedhold=[];
             if switches.GS
@@ -839,7 +770,7 @@ end
 
 %% LINK NUISANCE SEEDS
 
-for i=1:numsubs
+for i=1:numvcs
     
     QC(i).subseeddir=[QC(i).subdir '/nusseeds/'];
     if ~exist(QC(i).subseeddir)
@@ -891,7 +822,7 @@ end
 
 
 %% CALCULATE SUBJECT MOVEMENT
-for i=1:numsubs
+for i=1:numvcs
     for j=1:size(QC(i).restruns,1)
         
         cd(QC(i).subbolddir{j});
@@ -957,7 +888,7 @@ end
 
 
 %% DEFINE RUN BORDERS
-for i=1:numsubs
+for i=1:numvcs
     trpos=0;
     tr(i).tot=numel(QC(i).FD);
     for j=1:size(QC(i).restruns,1)
@@ -980,7 +911,7 @@ end
 %% ASSEMBLE TEMPORAL MASKS
 switch tmasktype
     case 'ones'
-        for i=1:numsubs
+        for i=1:numvcs
             for j=1:size(QC(i).restruns,1)
                 QC(i).runtmask{j}=ones(size(FD{i,j},1),1);
                 QC(i).runtmask{j}(1:QC(i).TRskip)=0;
@@ -1004,7 +935,7 @@ switch tmasktype
         end
 end
 
-for i=1:numsubs
+for i=1:numvcs
     cd(QC(i).subdir);
     dlmwrite('total_tmask.txt',QC(i).tmask,'\t');
     tmask2format(QC(i).tmask,'total_tmask_avi.txt');
@@ -1022,7 +953,7 @@ end
 bigstuff=1; % this saves voxelwise timecourses over processing.
 skipvox=15; % downsample grey matter voxels for visuals.
 set(0, 'DefaultFigureVisible', 'off');
-for f=1:numsubs
+for f=1:numvcs
     
     % orders subjects in decreasing order to minimize memory fragmentation
     i=sortsubs(f);
@@ -1594,16 +1525,6 @@ for f=1:numsubs
     % create a final DV file
     system(['cp total_DV_' LASTCONC{stage} '.txt total_DV_final.txt']);
     
-    %%% CLEAN UP %%%
-    if cleanup
-        system(['rm *.conc*']);
-        for j=1:size(QC(i).restruns,1)
-            cd(QC(i).subbolddir{j});
-            for k=2:stage % all intermediate files
-                system(['rm ' LASTIMG{i,j,k} '.*' ]);
-            end
-        end
-    end
     
     % write summary log file
     cd(QC(i).subdir);
@@ -1671,7 +1592,7 @@ end
 cd(tdir);
 % write a corrfile
 fid=fopen('corrfile.txt','w');
-for i=1:numsubs
+for i=1:numvcs
     fprintf(fid,'%s\t%s\t%s\n',[QC(i).subdir '/' QC(i).vcnum '_' allends '.4dfp.img'],[QC(i).subdir '/total_tmask.txt'],QC(i).vcnum);
 end
 fclose(fid);
