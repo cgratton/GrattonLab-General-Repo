@@ -1,0 +1,70 @@
+subject=01
+
+runname=RUN
+echo $subject
+cd /Users/derek.smith/Desktop/General_Testing_Folder/iNet006
+afni_proc.py                                                          \
+-subj_id Mixed_All_Runs_Orig${subject}_${runname}                                        \
+-copy_anat /Users/derek.smith/Desktop/General_Testing_Folder/iNet006/anat/struc1_e1.nii                         \
+-dsets /Users/derek.smith/Desktop/General_Testing_Folder/iNet006/func/func*.nii                     \
+-blocks despike align volreg blur mask scale regress                                                   \
+-script Mixed_All_Runs3tasks_Orig.tcsh                               \
+-volreg_align_to MIN_OUTLIER                                                \
+-volreg_align_e2a                                                     \
+-volreg_allin_cost lpa+zz \
+-volreg_post_vr_allin yes \
+-volreg_pvra_base_index MIN_OUTLIER \
+-align_opts_aea -AddEdge -giant_move \
+-blur_size 4                                                          \
+-regress_stim_times /Users/derek.smith/Desktop/General_Testing_Folder/iNet006/stimuli_full/*.txt  \
+-regress_stim_labels AbsCon_abs_corr AbsCon_amb AbsCon_con_corr AbsCon_endcue AbsCon_error AbsCon_startcue AbsCon_sustained MR_endcue MR_error MR_mirror_corr MR_same_corr MR_startcue MR_sustained Rhyme_amb Rhyme_endcue Rhyme_error Rhyme_no_corr Rhyme_startcue Rhyme_sustained Rhyme_yes_corr             \
+-regress_basis_multi 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'BLOCK(104.5,1)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'BLOCK(104.5,1)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'TENT(0,17.6,16)' 'BLOCK(104.5,1)' 'TENT(0,17.6,16)' \
+-regress_local_times                                                  \
+-regress_censor_motion 0.3                                            \
+-regress_motion_per_run                                                             \
+-regress_opts_3dD                                                     \
+-num_glt 19 \
+-gltsym 'SYM: +.05*AbsCon_abs_corr +.05*AbsCon_amb +.05*AbsCon_con_corr +.05*AbsCon_endcue +.05*AbsCon_error +.05*AbsCon_startcue +.05*AbsCon_sustained +.05*MR_endcue +.05*MR_error +.05*MR_mirror_corr +.05*MR_same_corr +.05*MR_startcue +.05*MR_sustained +.05*Rhyme_amb +.05*Rhyme_endcue +.05*Rhyme_error +.05*Rhyme_no_corr +.05*Rhyme_startcue +.05*Rhyme_sustained +.05*Rhyme_yes_corr' \
+-glt_label 1 Task_Effect \
+-gltsym 'SYM: +.167*AbsCon_abs_corr +.167*AbsCon_con_corr +.167*MR_mirror_corr +.167*MR_same_corr +.167*Rhyme_no_corr +.167*Rhyme_yes_corr' \
+-glt_label 2 Correct_Effect \
+-gltsym 'SYM: +.33*AbsCon_error +.33*MR_error +.33*Rhyme_error' \
+-glt_label 3 Error_Effect \
+-gltsym 'SYM: +.33*AbsCon_sustained +.33*MR_sustained +.33*Rhyme_sustained' \
+-glt_label 4 Sustained_Effect \
+-gltsym 'SYM: +.167*AbsCon_endcue +.167*AbsCon_startcue +.167*MR_endcue +.167*MR_startcue +.167*Rhyme_endcue +.167*Rhyme_startcue' \
+-glt_label 5 All_Cue_Effect \
+-gltsym 'SYM: +.167*MR_endcue +.167*MR_error +.167*MR_mirror_corr +.167*MR_same_corr +.167*MR_startcue +.167*MR_sustained' \
+-glt_label 6 MR_Effect \
+-gltsym 'SYM: +.143*Rhyme_amb +.143*Rhyme_endcue +.143*Rhyme_error +.143*Rhyme_no_corr +.143*Rhyme_startcue +.143*Rhyme_sustained +.143*Rhyme_yes_corr' \
+-glt_label 7 Rhyme_Effect \
+-gltsym 'SYM: +.5*MR_mirror_corr +.5*MR_same_corr' \
+-glt_label 8 MR_Correct_Effect \
+-gltsym 'SYM: +.5*Rhyme_no_corr +.5*Rhyme_yes_corr' \
+-glt_label 9 Rhyme_Correct_Effect \
+-gltsym 'SYM: +.5*MR_endcue +.5*MR_startcue' \
+-glt_label 10 MR_Cue_Effect \
+-gltsym 'SYM: +.5*Rhyme_endcue +.5*Rhyme_startcue' \
+-glt_label 11 Rhyme_Cue_Effect \
+-gltsym 'SYM: -.167*AbsCon_abs_corr -.167*AbsCon_con_corr +.33*AbsCon_error +.33*MR_error -.167*MR_mirror_corr -.167*MR_same_corr +.33*Rhyme_error -.167*Rhyme_no_corr -.167*Rhyme_yes_corr' \
+-glt_label 12 ErrorMinusCorrect_Effect \
+-gltsym 'SYM: -.25*AbsCon_abs_corr +.5*AbsCon_amb -.25*AbsCon_con_corr +.5*Rhyme_amb -.25*Rhyme_no_corr -.25*Rhyme_yes_corr' \
+-glt_label 13 AmbMinusCorrect_Effect \
+-gltsym 'SYM: +.5*AbsCon_amb +.5*Rhyme_amb' \
+-glt_label 14 Am_Effect \
+-gltsym 'SYM: +.143*AbsCon_amb +.143*AbsCon_abs_corr +.143*AbsCon_con_corr +.143*AbsCon_endcue +.143*AbsCon_error +.143*AbsCon_startcue +.143*AbsCon_sustained' \
+-glt_label 15 AbsCon_Effect \
+-gltsym 'SYM: +.5*AbsCon_abs_corr +.5*AbsCon_con_corr' \
+-glt_label 16 AbsCon_Correct_Effect \
+-gltsym 'SYM: +.5*AbsCon_endcue +.5*AbsCon_startcue' \
+-glt_label 17 AbsCon_Cue_Effect \
+-gltsym 'SYM: +.33*AbsCon_startcue +.33*MR_startcue +.33*Rhyme_startcue' \
+-glt_label 18 StartCue_Effect \
+-gltsym 'SYM: +.33*AbsCon_endcue +.33*MR_endcue +.33*Rhyme_endcue' \
+-glt_label 19 Endcue_Effect \
+-float                                                                \
+-jobs 4                                                               \
+-regress_est_blur_epits                                               \
+-regress_est_blur_errts                                               \
+-regress_run_clustsim no                                             \
+-bash
