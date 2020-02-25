@@ -70,7 +70,7 @@ for ses = sessions
         
         % filter mot data
         mot_data_filtered = filter_motion(TR,mot_data);
-        save(sprintf('%s%smvm.txt',outputdir,outstr),'mot_data');
+        save(sprintf('%s%smvm.txt',outputdir,outstr),'mot_data','-ascii');
         save(sprintf('%s%smvm_filt.txt',outputdir,outstr),'mot_data_filtered');
         
         % calculate FD pre and post filtering
