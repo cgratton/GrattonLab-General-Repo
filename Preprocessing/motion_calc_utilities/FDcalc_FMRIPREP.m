@@ -78,7 +78,6 @@ for ses = sessions
         save(sprintf('%s%smvm.txt',outputdir,outstr),'mot_data', '-ascii', '-double', '-tabs');
         writematrix(mot_data_filtered,sprintf('%s%smvm_filt.txt',outputdir,outstr));
         %save(sprintf('%s%smvm_filt.txt',outputdir,outstr),'mot_data_filtered', '-ascii');
-
         
         % calculate FD pre and post filtering
         mot_data_diff = [zeros(1,6); diff(mot_data)];
