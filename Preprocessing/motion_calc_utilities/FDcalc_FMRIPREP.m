@@ -1,4 +1,4 @@
-function FDcalc_FMRIPREP()
+function FDcalc_FMRIPREP(topdir,preprocType,subject,sessions,varargin)
 % function for calculating FD and making tmasks from FMRIPREP
 % difference from FMRIPREP output: filters FD values, does more
 % conservative tmasking (contig frames, min per run, etc.)
@@ -6,19 +6,25 @@ function FDcalc_FMRIPREP()
 % Dependencies:
 % need the BIDS matlab toolbox in your path to load confounds: https://github.com/bids-standard/bids-matlab
 % plotting_utilities: hline_new.m (see GrattonLab Scripts folder - better hline)
+%
+% Primary settings that change (make these inputs eventually)
+%topdir = '~/Box/DATA/Lifespan/BIDS/Nifti/derivatives/'; % change to /projects/b1081/ if running on Quest; change to ~/Box/DATA/iNetworks/BIDS/derivatives/ for more permanent storage on Box; keep in Backup ONLY for testing
+%preprocType = 'fmriprep'; % change this as need to point to correct folder (e.g., fmriprep-1.5.8)
+%subject = 'LS03'; % subject ID
+%sessions = [1:3]; % list of session numbers
+%varargin: structure with project specific information on
+%FD/filtering parameters (see below for standard examples if this
+%isn't provided
 
-
-%%% Primary settings that change (make these inputs eventually)
-topdir = '~/Box/DATA/Lifespan/BIDS/Nifti/derivatives/'; % change to /projects/b1081/ if running on Quest; change to ~/Box/DATA/iNetworks/BIDS/derivatives/ for more permanent storage on Box; keep in Backup ONLY for testing
-preprocType = 'fmriprep'; % change this as need to point to correct folder (e.g., fmriprep-1.5.8)
-subject = 'LS03'; % subject ID
-sessions = [1:3]; % list of session numbers
-
+    
 %%% Directory structure
 projectdir = [topdir 'preproc_' preprocType '/fmriprep/sub-' subject '/'];
 input_filestr = 'confounds_regressors.tsv'; %search for all files for all runs
 
 %%% FD/filtering parameters (these will probably be constant within a study but potentially vary across studies)
+if nargin == 4
+    % if FD/filtering parameters are not provided, use these
+    % defaults from iNetworks
 TR = 1.1; 
 contig_frames = 5; % Number of continuous samples w/o high FD necessary for inclusion           
 DropFramesSec = 30; % number of seconds of frames to drop at the start of each run
@@ -28,6 +34,20 @@ FDthresh = 0.2;
 fFDthresh = 0.1;
 run_min = 50; % minimum number of frames in a run
 tot_min = 150; % minimum number of frames needed across all runs
+else
+    % assume varargin{1} = structure with each of the following fields
+    TR = varargin{1}.TR;
+    contig_frames = varargin{1}.contig_frames;
+    DropFramesSec = varargin{1}.DropFramesSec;
+    DropFramesTR = round(DropFramesSec/TR);
+    headsize = varargin{1}.headsize;
+    FDthresh = varargin{1}.FDthresh;
+    fFDthresh = varargin{1}.fFDthresh;
+    run_min = varargin{1}.run_min;
+    tot_min = varargin{1}.tot_min;
+end
+
+    
               
 % fmriprep relevant field names from confounds file
 %   order in most sensible order you like 
