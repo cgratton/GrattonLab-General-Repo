@@ -70,15 +70,10 @@ for ses = sessions
         
         % filter mot data
         mot_data_filtered = filter_motion(TR,mot_data);
-        %% these lines might need changing throughout the code or txt files might not save appropriately
-        %Here are two option: writematrix is more likely to work, but
-        %adding -ascii, -double, and -tabs to the save command works for
-        %some of these lines (not all). Change throughout the code!
         %writematrix(mot_data,sprintf('%s%smvm.txt',outputdir,outstr));
         save(sprintf('%s%smvm.txt',outputdir,outstr),'mot_data', '-ascii', '-double', '-tabs');
         writematrix(mot_data_filtered,sprintf('%s%smvm_filt.txt',outputdir,outstr));
         %save(sprintf('%s%smvm_filt.txt',outputdir,outstr),'mot_data_filtered', '-ascii');
-
         
         % calculate FD pre and post filtering
         mot_data_diff = [zeros(1,6); diff(mot_data)];
