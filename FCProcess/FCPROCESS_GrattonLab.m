@@ -1,4 +1,4 @@
-function [allends switches] = FCPROCESS_iNetworks(datafile,tdir,tmasktype,freesurferlist,varargin)
+function [allends switches] = FCPROCESS_iNetworks(datafile,tdir,tmasktype,freesurferfile,varargin)
 % This script is the fcprocessing script, originally from the Petersen
 % lab, now for the Gratton lab.
 % FCPROCESS(datalist,targetdir,tmasktype,freesurferlist)
@@ -66,9 +66,9 @@ function [allends switches] = FCPROCESS_iNetworks(datafile,tdir,tmasktype,freesu
 % % %releasedir = '/data/petsun4/data1/solaris'; CG - get AFNI functions?
 % % %roidir='/home/usr/fidl/lib/'; CG - do we ever use this?
 startdir=pwd;
-voxdim='333'; % make this an input? Add a resampling step to prep data to this res before?
-switches.WMero=4;
-switches.CSFero=1;
+voxdim='333'; % make this an input? Add a resampling step to prep data to this (or 222) res?
+switches.WMero=4; % default erosion for freesurfer WM mask. Check before this that this looks good
+switches.CSFero=1; % default erosion for freesurfer CSF mask. Check before this that this looks good.
 set(0, 'DefaultFigureVisible', 'off'); % puts figures in the background while running
 
 
@@ -100,7 +100,7 @@ end
 
 %% READ IN FREESURFER
 if ~isempty(varargin)
-    [FSfile.vc FSfile.dir]=textread(varargin{1,1},'%s%s');
+    [FSfile.vc FSfile.dir]=textread(freesurferfile,'%s%s');
 end
 for i=1:numvcs
     QC(i).fsdir=[FSfile.dir{1} '/' FSfile.vc{1}];
