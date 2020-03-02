@@ -1,4 +1,4 @@
-function [allends switches] = FCPROCESS_iNetworks(datafile,tdir,tmasktype,freesurferfile,varargin)
+function [allends switches] = FCPROCESS_iNetworks(datafile,outputDir,tmasktype,freesurferfile,varargin)
 % This script is the fcprocessing script, originally from the Petersen
 % lab, now for the Gratton lab.
 % FCPROCESS(datalist,targetdir,tmasktype,freesurferlist)
@@ -103,20 +103,26 @@ for i = 1:length(numdatas)
         conf_fstring1 = sprintf('%s/%s/fmriprep/sub-%s/ses-%02d/func/',QC(i).topDir,QC(i).confoundsFolder,QC(i).subject,QC(i).session);
         all_fstring2 = sprintf('sub-%s_ses-%02d_task-%s_run-%02d',QC(i).subject,QC(i).session,QC(i).cond,QC(i).runs(r));
         
-        data_fname = [data_fstring1 all_fstring2 '_space-MNI152Lin2009cAsym_desc-preproc_bold.nii.gz'];
+        bolddata_fname = [data_fstring1 all_fstring2 '_space-MNI152Lin2009cAsym_desc-preproc_bold.nii.gz'];
+        boldavg_fname = [data_fstring1 all_fstring2 '_space-MNI152Lin2009cAsym_boldref.nii.gz'];
         confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_regressors.tsv'];
         tmask_fname = [conf_fstring1 'FDoutputs/' all_fstring2 'desc-tmask_' QC(i).FDtype '.txt']; %assume this is in confounds folder
         
         %boldmat{i,j} = []; %cell2mat(strcat(df.filepath{i,1},'/motion_params/',QC(i).vcnum,'_b',task,QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat')); - EDIT
         %boldimg{i,j} = [df.filepath{i,1} QC(i).vcnum ]; %cell2mat(strcat(df.filepath{i,1},'/residuals/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.img'));
         %boldifh{i,j} = cell2mat(strcat(df.filepath{i,1},'/residuals/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.ifh'));
-        boldnii{i,r} = data_fname;
+        boldnii{i,r} = bolddata_fname;
+        boldavgnii{i,r} = boldavg_fname;
         boldconf{i,r} = confounds_fname;
         boldtmask{i,r} = tmask_fname;
         boldmot_fstart{i,r} = [conf_fstring1 'FDoutputs/' all_fstring2]; % in this case, just give path/start so I can load different versions
         
-        if ~exist(data_fname)
-            error(['Data does not exist. Check paths and FMRIPREP output for: ' data_fname]);
+        if ~exist(bolddata_fname)
+            error(['Data does not exist. Check paths and FMRIPREP output for: ' bolddata_fname]);
+        end
+        
+        if ~exist(boldavg_fname)
+            error(['Bold ref does not exist. Check paths and FMRIPREP output for: ' bolddata_fname]);
         end
         
         if ~exist(confounds_fname)
@@ -130,6 +136,14 @@ for i = 1:length(numdatas)
                     error(['Tmasks do not exist. Run FDcalc script for: ' tmask_fname]);
                 end
         end
+    end
+    
+    % there is only one anatomy target across all runs and sessions
+    mpr_fname = sprintf('%s/%s/fmriprep/sub-%s/anat/sub-%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz',QC(i).topDir,QC(i).dataFolder,QC(i).subject,QC(i).subject);
+    mprnii{i,1} = mpr_fname;
+    
+    if ~exist(mpr_fname)
+        error(['MPRAGE does not exist. Check paths and FMRIPREP output for: ' mpr_fname]);
     end
 end
  
@@ -183,214 +197,7 @@ if length(varargin) > 0
     plot_silent = 1;
 else
     % get input from user
-    needcorrectinput=1;
-    while needcorrectinput
-        switches.doregression=input('Do you want to regress nuisance signals? (1=y; 0=no): ');
-        switch switches.doregression
-            case 1
-                needcorrectinput=0;                
-                needcorrectinput2=1;
-                while needcorrectinput2
-                    switches.regressiontype=input('Regression: 1 - Freesurfer seeds: ');
-                    switch switches.regressiontype
-                        
-                        % classic or freesurfer seeds
-                        case {1}
-                            needcorrectinput2=0;
-                            
-                            needcorrectinput1=1;
-                            while needcorrectinput1
-                                switches.motionestimates=input('Do you want to regress motion estimates and derivatives? (0=no; 1=R,R`; 2=FRISTON; 20=R,R`,12rand; 3:volt3): ');
-                                switch switches.motionestimates
-                                    case {0,1,2,20,3}
-                                        needcorrectinput1=0;
-                                end
-                            end
-                            needcorrectinput1=1;
-                            while needcorrectinput1
-                                switches.WM=input('Do you want to regress white matter signals and derivatives? (1=y; 0=no): ');
-                                switch switches.WM
-                                    case {0,1}
-                                        needcorrectinput1=0;
-                                end
-                            end
-                            needcorrectinput1=1;
-                            while needcorrectinput1
-                                switches.V=input('Do you want to regress ventricular signals and derivatives? (1=y; 0=no): ');
-                                switch switches.V
-                                    case {0,1}
-                                        needcorrectinput1=0;
-                                end
-                            end
-                            needcorrectinput1=1;
-                            while needcorrectinput1
-                                switches.GS=input('Do you want to regress global signal and derivative? (1=y; 0=no): ');
-                                switch switches.GS
-                                    case {0,1}
-                                        needcorrectinput1=0;
-                                end
-                            end
-                            
-                            % user seeds
-                        case 2
-                            needcorrectinput2=0;
-                            switches.nus4dfplistfile=input('Enter the hard path to the list of nuisance regressor 4dfps ','s');
-                            [switches.nus4dfpvcnum switches.nus4dfplist] = textread(switches.nus4dfplistfile,'%s%s');
-                            if ~isequal(switches.nus4dfpvcnum,prepstem)
-                                error('Nusiance 4dfp vcnums do not match the vc ordering of the datalist');
-                            end
-                            
-                            needcorrectinput1=1;
-                            while needcorrectinput1
-                                switches.motionestimates=input('Do you want to also regress motion estimates and derivatives? (1=y; 0=no): ');
-                                switch switches.motionestimates
-                                    case {0,1}
-                                        needcorrectinput1=0;
-                                end
-                            end
-                            
-                            % user txt file
-                        case 3
-                            needcorrectinput2=0;
-                            switches.nustxtlistfile=input('Enter the hard path to the list of nuisance regressor files ','s');
-                            [switches.nustxtvcnum switches.nustxtlist] = textread(switches.nustxtlistfile,'%s%s');
-                            if ~isequal(switches.nustxtvcnum,prepstem)
-                                error('Nusiance txt vcnums do not match the vc ordering of the datalist');
-                            end
-                            
-                            needcorrectinput1=1;
-                            while needcorrectinput1
-                                switches.motionestimates=input('Do you want to also regress motion estimates and derivatives? (1=y; 0=no): ');
-                                switch switches.motionestimates
-                                    case {0,1}
-                                        needcorrectinput1=0;
-                                end
-                            end
-                            
-                        case 9
-                            needcorrectinput=0;
-                            needcorrectinput2=0;
-                            switches.motionestimates=1;
-                            switches.WMV=1.
-                            switches.GS=1;
-                            switches.dicesize=input('What size dice to use? (# voxels): ');
-                            switches.mindicevox=input('What is minimum # voxels needed in cubes?: ');
-                            switches.tcchop=input('What size timeseries to use? (TRs): ');
-                            switches.varexpl=input('How much variance should SVD explain?: ');
-                            switches.WMero=input('How many WM erosions (4 recommended)?: ');
-                            switches.CSFero=input('How many CSF erosions (1 recommended)?: ');
-                            switches.sdval=input('What s.d. threshold to form nuisance mask? ');
-                            
-                    end
-                end
-            case 0
-                needcorrectinput=0;
-        end
-    end
-    
-    % interpolate
-    needcorrectinput=1;
-    while needcorrectinput
-        switches.dointerpolate=input('Do you want to interpolate over motion epochs? (1=y; 0=no): ');
-        switch switches.dointerpolate
-            case {0,1}
-                needcorrectinput=0;
-        end
-    end
-    
-    % temporal filter lowpass
-    needcorrectinput=1;
-    while needcorrectinput
-        switches.dobandpass=input('Do you want to temporally filter the data (1=y; 0=no): ');
-        switch switches.dobandpass
-            case 1
-                needcorrectinput=0;
-            case 0
-                needcorrectinput=0;
-        end
-    end
-    
-    if switches.dobandpass
-        needcorrectinput=1;
-        while needcorrectinput
-            switches.temporalfiltertype=input('What type of filter: (1) lowpass, (2) highpass (3) bandpass: ');
-            switch switches.temporalfiltertype
-                case {1,2,3}
-                    needcorrectinput=0;
-            end
-        end
-        
-        if switches.temporalfiltertype
-            switch switches.temporalfiltertype
-                case 1
-                    needcorrectinput1=1;
-                    while needcorrectinput1
-                        switches.lopasscutoff=input('What low-pass cutoff is desired (in Hz; .08 is standard): ');
-                        if isnumeric(switches.lopasscutoff)
-                            needcorrectinput1=0;
-                        end
-                    end
-                case 2
-                    needcorrectinput1=1;
-                    while needcorrectinput1
-                        switches.hipasscutoff=input('What high-pass cutoff is desired (in Hz; .009 is standard): ');
-                        if isnumeric(switches.hipasscutoff)
-                            needcorrectinput1=0;
-                        end
-                    end
-                case 3
-                    needcorrectinput1=1;
-                    while needcorrectinput1
-                        switches.lopasscutoff=input('What low-pass cutoff is desired (in Hz; .08 is standard): ');
-                        if isnumeric(switches.lopasscutoff)
-                            needcorrectinput1=0;
-                        end
-                    end
-                    needcorrectinput1=1;
-                    while needcorrectinput1
-                        switches.hipasscutoff=input('What high-pass cutoff is desired (in Hz; .009 is standard): ');
-                        if isnumeric(switches.hipasscutoff)
-                            needcorrectinput1=0;
-                        end
-                    end
-                    if switches.lopasscutoff <= switches.hipasscutoff
-                        fprintf('Low-pass cutoff must be higher than the high-pass cutoff\n');
-                    end
-            end
-            needcorrectinput1=1;
-            while needcorrectinput1
-                switches.order=input('What filter order is desired (1 is standard): ');
-                if isnumeric(switches.order)
-                    needcorrectinput1=0;
-                end
-            end
-            
-        end
-        
-    end
-    
-    % blurring
-    needcorrectinput=1;
-    while needcorrectinput
-        switches.doblur=input('Do you want to spatially blur the data (1=y; 0=no): ');
-        switch switches.doblur
-            case 1
-                needcorrectinput=0;
-                needcorrectinput1=1;
-                while needcorrectinput1
-                    switches.blurkernel=input('What blurring kernel do you want (in mm; 6 is standard): ');
-                    if isnumeric(switches.blurkernel)
-                        needcorrectinput1=0;
-                        
-                        fprintf('Blur kernel is %d mm\n',switches.blurkernel);
-                        
-                        
-                    end
-                end
-            case 0
-                needcorrectinput=0;
-        end
-    end
+    switches = get_input_from_user();    
 end
 
 if switches.doblur
@@ -423,15 +230,15 @@ tic
 %% CHECK FOR PRESENCE OF STRUCTURAL AND BOLD FILES
 
 % CHECK FOR BOLD DATA
-for i=1:numdatas
-%CG - doing this earlier... delete these lines? Merge two sections?
+%for i=1:numdatas
+%%CG - doing this earlier... delete these lines? Merge two sections?
 %     fprintf('CHECKING BOLD RUNS\t%d\t%s\n',i,QC(i).vcnum); 
 %     % determine which BOLD runs are rest runs
 %     clear tempruns; [trash tempruns] = system([ 'awk -F "(" ''{print$2}'' ' df.prmfile{i,1} ' | awk -F ")" ''{print $1}''' ]);
 %     QC(i).condition_runs = strread(tempruns,'%s','delimiter',' ');
     
 
-% CG: NOW SET THIS UP ERARLIER. REMOVE BELOW?
+%% CG: NOW SET THIS UP ERARLIER. REMOVE BELOW?
     % cycle through each BOLD run
 %     for j=1:size(QC(i).runs,1)
 %         
@@ -457,33 +264,35 @@ for i=1:numdatas
 %         end
 %     end
     
-    %anataveimg{i,1} = [ df.filepath{i,1} '/' QC(i).vcnum '/unwarp_mean/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.img'];
-    %anataveifh{i,1} = [ df.filepath{i,1} '/' QC(i).vcnum '/unwarp_mean/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.ifh'];
-    anataveimg{i,1} = [ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.img']; %this isn't set up to work per run... change? For now defaulting to run 1 (doesn't seem worth changing, since isn't used...)
-    anataveifh{i,1} = [ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.ifh'];
+
+%% CG: set this up earlier as well - DELETE?
+%     %anataveimg{i,1} = [ df.filepath{i,1} '/' QC(i).vcnum '/unwarp_mean/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.img'];
+%     %anataveifh{i,1} = [ df.filepath{i,1} '/' QC(i).vcnum '/unwarp_mean/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.ifh'];
+%     anataveimg{i,1} = [ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.img']; %this isn't set up to work per run... change? For now defaulting to run 1 (doesn't seem worth changing, since isn't used...)
+%     anataveifh{i,1} = [ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.ifh'];
+%     
+%     %mprimg{i,1}=[ df.filepath{i,1} '/' QC(i).vcnum '/atlas/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.img'];
+%     %mprifh{i,1}=[ df.filepath{i,1} '/' QC(i).vcnum '/atlas/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.ifh'];
+%     mprimg{i,1}=[ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_mpr_n1_' voxdim '_t88.4dfp.img']; %this isn't set up to work per run... change? For now defaulting to run 1 - doesn't seem worth changing, since isn't used
+%     mprifh{i,1}=[ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_mpr_n1_' voxdim '_t88.4dfp.ifh'];
+%     %  mprimg{i,1}(end)=[];
+%     %  mprifh{i,1}(end)=[];
+%     
+%     if ~exist(anataveimg{i,1})
+%         error('\t%s is not found\n',anataveimg{i,1});
+%     end
+%     if ~exist(mprimg{i,1})
+%         error('\t%s is not found\n',mprimg{i,1});
+%     end
     
-    %mprimg{i,1}=[ df.filepath{i,1} '/' QC(i).vcnum '/atlas/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.img'];
-    %mprifh{i,1}=[ df.filepath{i,1} '/' QC(i).vcnum '/atlas/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.ifh'];
-    mprimg{i,1}=[ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_mpr_n1_' voxdim '_t88.4dfp.img']; %this isn't set up to work per run... change? For now defaulting to run 1 - doesn't seem worth changing, since isn't used
-    mprifh{i,1}=[ df.filepath{i,1} '/atlas/' QC(i).vcnum '_b' QC(i).restruns{1} '_mpr_n1_' voxdim '_t88.4dfp.ifh'];
-    %  mprimg{i,1}(end)=[];
-    %  mprifh{i,1}(end)=[];
-    
-    if ~exist(anataveimg{i,1})
-        error('\t%s is not found\n',anataveimg{i,1});
-    end
-    if ~exist(mprimg{i,1})
-        error('\t%s is not found\n',mprimg{i,1});
-    end
-    
-end
+%end
 
 
 %% LINKING TO BOLD DATA
 
 % prepare output directory
-if ~exist(tdir)
-    mkdir(tdir)
+if ~exist(outputDir)
+    mkdir(outputDir)
 end
 fprintf('PREPARING OUTPUT DIRECTORIES\n');
 fprintf('LINKING BOLD DATA\n');
@@ -491,7 +300,7 @@ pause(2);
 for i=1:numdatas
     
     % prepare target subject directory
-    QC(i).subdir=[tdir '/' QC(i).vcnum ];
+    QC(i).subdir=[outputDir '/' QC(i).vcnum ];
     if exist(QC(i).subdir)
         rmdir(QC(i).subdir,'s');
     end
@@ -1634,7 +1443,7 @@ end
 
 
 %% RETURN TO THE STARTING DIRECTORY AND SAVE LABELS
-cd(tdir);
+cd(outputDir);
 % write a corrfile
 fid=fopen('corrfile.txt','w');
 for i=1:numdatas
@@ -2061,6 +1870,213 @@ Std_h = std(h);
 norm_fac = Std_H./Std_h;
 H = bsxfun(@rdivide,H,norm_fac);
 
-
-
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function switches = get_input_from_user()
+    needcorrectinput=1;
+    while needcorrectinput
+        switches.doregression=input('Do you want to regress nuisance signals? (1=y; 0=no): ');
+        switch switches.doregression
+            case 1
+                needcorrectinput=0;                
+                needcorrectinput2=1;
+                while needcorrectinput2
+                    switches.regressiontype=input('Regression: 1 - Freesurfer seeds: ');
+                    switch switches.regressiontype
+                        
+                        % classic or freesurfer seeds
+                        case {1}
+                            needcorrectinput2=0;
+                            
+                            needcorrectinput1=1;
+                            while needcorrectinput1
+                                switches.motionestimates=input('Do you want to regress motion estimates and derivatives? (0=no; 1=R,R`; 2=FRISTON; 20=R,R`,12rand; 3:volt3): ');
+                                switch switches.motionestimates
+                                    case {0,1,2,20,3}
+                                        needcorrectinput1=0;
+                                end
+                            end
+                            needcorrectinput1=1;
+                            while needcorrectinput1
+                                switches.WM=input('Do you want to regress white matter signals and derivatives? (1=y; 0=no): ');
+                                switch switches.WM
+                                    case {0,1}
+                                        needcorrectinput1=0;
+                                end
+                            end
+                            needcorrectinput1=1;
+                            while needcorrectinput1
+                                switches.V=input('Do you want to regress ventricular signals and derivatives? (1=y; 0=no): ');
+                                switch switches.V
+                                    case {0,1}
+                                        needcorrectinput1=0;
+                                end
+                            end
+                            needcorrectinput1=1;
+                            while needcorrectinput1
+                                switches.GS=input('Do you want to regress global signal and derivative? (1=y; 0=no): ');
+                                switch switches.GS
+                                    case {0,1}
+                                        needcorrectinput1=0;
+                                end
+                            end
+                            
+                            % user seeds
+                        case 2
+                            needcorrectinput2=0;
+                            switches.nus4dfplistfile=input('Enter the hard path to the list of nuisance regressor 4dfps ','s');
+                            [switches.nus4dfpvcnum switches.nus4dfplist] = textread(switches.nus4dfplistfile,'%s%s');
+                            if ~isequal(switches.nus4dfpvcnum,prepstem)
+                                error('Nusiance 4dfp vcnums do not match the vc ordering of the datalist');
+                            end
+                            
+                            needcorrectinput1=1;
+                            while needcorrectinput1
+                                switches.motionestimates=input('Do you want to also regress motion estimates and derivatives? (1=y; 0=no): ');
+                                switch switches.motionestimates
+                                    case {0,1}
+                                        needcorrectinput1=0;
+                                end
+                            end
+                            
+                            % user txt file
+                        case 3
+                            needcorrectinput2=0;
+                            switches.nustxtlistfile=input('Enter the hard path to the list of nuisance regressor files ','s');
+                            [switches.nustxtvcnum switches.nustxtlist] = textread(switches.nustxtlistfile,'%s%s');
+                            if ~isequal(switches.nustxtvcnum,prepstem)
+                                error('Nusiance txt vcnums do not match the vc ordering of the datalist');
+                            end
+                            
+                            needcorrectinput1=1;
+                            while needcorrectinput1
+                                switches.motionestimates=input('Do you want to also regress motion estimates and derivatives? (1=y; 0=no): ');
+                                switch switches.motionestimates
+                                    case {0,1}
+                                        needcorrectinput1=0;
+                                end
+                            end
+                            
+                        case 9
+                            needcorrectinput=0;
+                            needcorrectinput2=0;
+                            switches.motionestimates=1;
+                            switches.WMV=1.
+                            switches.GS=1;
+                            switches.dicesize=input('What size dice to use? (# voxels): ');
+                            switches.mindicevox=input('What is minimum # voxels needed in cubes?: ');
+                            switches.tcchop=input('What size timeseries to use? (TRs): ');
+                            switches.varexpl=input('How much variance should SVD explain?: ');
+                            switches.WMero=input('How many WM erosions (4 recommended)?: ');
+                            switches.CSFero=input('How many CSF erosions (1 recommended)?: ');
+                            switches.sdval=input('What s.d. threshold to form nuisance mask? ');
+                            
+                    end
+                end
+            case 0
+                needcorrectinput=0;
+        end
+    end
+    
+    % interpolate
+    needcorrectinput=1;
+    while needcorrectinput
+        switches.dointerpolate=input('Do you want to interpolate over motion epochs? (1=y; 0=no): ');
+        switch switches.dointerpolate
+            case {0,1}
+                needcorrectinput=0;
+        end
+    end
+    
+    % temporal filter lowpass
+    needcorrectinput=1;
+    while needcorrectinput
+        switches.dobandpass=input('Do you want to temporally filter the data (1=y; 0=no): ');
+        switch switches.dobandpass
+            case 1
+                needcorrectinput=0;
+            case 0
+                needcorrectinput=0;
+        end
+    end
+    
+    if switches.dobandpass
+        needcorrectinput=1;
+        while needcorrectinput
+            switches.temporalfiltertype=input('What type of filter: (1) lowpass, (2) highpass (3) bandpass: ');
+            switch switches.temporalfiltertype
+                case {1,2,3}
+                    needcorrectinput=0;
+            end
+        end
+        
+        if switches.temporalfiltertype
+            switch switches.temporalfiltertype
+                case 1
+                    needcorrectinput1=1;
+                    while needcorrectinput1
+                        switches.lopasscutoff=input('What low-pass cutoff is desired (in Hz; .08 is standard): ');
+                        if isnumeric(switches.lopasscutoff)
+                            needcorrectinput1=0;
+                        end
+                    end
+                case 2
+                    needcorrectinput1=1;
+                    while needcorrectinput1
+                        switches.hipasscutoff=input('What high-pass cutoff is desired (in Hz; .009 is standard): ');
+                        if isnumeric(switches.hipasscutoff)
+                            needcorrectinput1=0;
+                        end
+                    end
+                case 3
+                    needcorrectinput1=1;
+                    while needcorrectinput1
+                        switches.lopasscutoff=input('What low-pass cutoff is desired (in Hz; .08 is standard): ');
+                        if isnumeric(switches.lopasscutoff)
+                            needcorrectinput1=0;
+                        end
+                    end
+                    needcorrectinput1=1;
+                    while needcorrectinput1
+                        switches.hipasscutoff=input('What high-pass cutoff is desired (in Hz; .009 is standard): ');
+                        if isnumeric(switches.hipasscutoff)
+                            needcorrectinput1=0;
+                        end
+                    end
+                    if switches.lopasscutoff <= switches.hipasscutoff
+                        fprintf('Low-pass cutoff must be higher than the high-pass cutoff\n');
+                    end
+            end
+            needcorrectinput1=1;
+            while needcorrectinput1
+                switches.order=input('What filter order is desired (1 is standard): ');
+                if isnumeric(switches.order)
+                    needcorrectinput1=0;
+                end
+            end
+            
+        end
+        
+    end
+    
+    % blurring
+    needcorrectinput=1;
+    while needcorrectinput
+        switches.doblur=input('Do you want to spatially blur the data (1=y; 0=no): ');
+        switch switches.doblur
+            case 1
+                needcorrectinput=0;
+                needcorrectinput1=1;
+                while needcorrectinput1
+                    switches.blurkernel=input('What blurring kernel do you want (in mm; 6 is standard): ');
+                    if isnumeric(switches.blurkernel)
+                        needcorrectinput1=0;
+                        
+                        fprintf('Blur kernel is %d mm\n',switches.blurkernel);
+                        
+                        
+                    end
+                end
+            case 0
+                needcorrectinput=0;
+        end
+    end
