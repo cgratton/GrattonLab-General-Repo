@@ -94,20 +94,27 @@ for ses = sessions
         %Here are two option: writematrix is more likely to work, but
         %adding -ascii, -double, and -tabs to the save command works for
         %some of these lines (not all). Change throughout the code!
-        %writematrix(mot_data,sprintf('%s%smvm.txt',outputdir,outstr));
-        save(sprintf('%s%smvm.txt',outputdir,outstr),'mot_data', '-ascii', '-double', '-tabs');
-        writematrix(mot_data_filtered,sprintf('%s%smvm_filt.txt',outputdir,outstr));
-        %save(sprintf('%s%smvm_filt.txt',outputdir,outstr),'mot_data_filtered', '-ascii');
+        %writematrix(mot_data,sprintf('%s%smvm.txt',outputdir,outstr)); %only works in Matlab 2019, not 2018 on quest
+        writetable(table(mot_data(:,1),mot_data(:,2),mot_data(:,3),mot_data(:,4),mot_data(:,5),mot_data(:,6),...
+            'VariableNames',mvm_fields),sprintf('%s%smvm.txt',outputdir,outstr));
+        %save(sprintf('%s%smvm.txt',outputdir,outstr),'mot_data', '-ascii','-double','-tabs');
+        %writematrix(mot_data_filtered,sprintf('%s%smvm_filt.txt',outputdir,outstr)); 
+        writetable(table(mot_data_filtered(:,1),mot_data_filtered(:,2),mot_data_filtered(:,3),...
+            mot_data_filtered(:,4),mot_data_filtered(:,5),mot_data_filtered(:,6),...
+                'VariableNames',mvm_fields),sprintf('%s%smvm_filt.txt',outputdir,outstr)); 
+        %save(sprintf('%s%smvm_filt.txt',outputdir,outstr),'mot_data_filtered', '-ascii','-double','-tabs');
         
         % calculate FD pre and post filtering
         mot_data_diff = [zeros(1,6); diff(mot_data)];
         mot_data_filt_diff = [zeros(1,6); diff(mot_data_filtered)];
         FD = sum(abs(mot_data_diff),2);
         fFD = sum(abs(mot_data_filt_diff),2);
-        writematrix(FD,sprintf('%s%sFD.txt',outputdir,outstr));
-        %save(sprintf('%s%sFD.txt',outputdir,outstr),'FD', '-ascii');
-        writematrix(fFD,sprintf('%s%sfFD.txt',outputdir,outstr));
-        %save(sprintf('%s%sfFD.txt',outputdir,outstr),'fFD', '-ascii');
+        %writematrix(FD,sprintf('%s%sFD.txt',outputdir,outstr));
+        writetable(table(FD),sprintf('%s%sFD.txt',outputdir,outstr));
+        %save(sprintf('%s%sFD.txt',outputdir,outstr),'FD', '-ascii','-double','-tabs');
+        %writematrix(fFD,sprintf('%s%sfFD.txt',outputdir,outstr));
+        writetable(table(fFD),sprintf('%s%sfFD.txt',outputdir,outstr));
+        %save(sprintf('%s%sfFD.txt',outputdir,outstr),'fFD', '-ascii','-double','-tabs');
         
         % plot original parameters & FD
         plot_motion_params(mot_data,FD,FDthresh,mvm_fields);
@@ -124,10 +131,12 @@ for ses = sessions
         % make a tmask for each run
         tmask_FD = make_tmask(FD,FDthresh,DropFramesTR,contig_frames);
         tmask_fFD = make_tmask(fFD,fFDthresh,DropFramesTR,contig_frames);
-        writematrix(tmask_FD,sprintf('%s%stmask_FD.txt',outputdir,outstr));
-        %save(sprintf('%s%stmask_FD.txt',outputdir,outstr),tmask_FD, '-ascii');
-        writematrix(tmask_fFD,sprintf('%s%stmask_fFD.txt',outputdir,outstr));
-        %save(sprintf('%s%stmask_fFD.txt',outputdir,outstr),'tmask_fFD', '-ascii');
+        %writematrix(tmask_FD,sprintf('%s%stmask_FD.txt',outputdir,outstr));
+        writetable(table(tmask_FD),sprintf('%s%stmask_FD.txt',outputdir,outstr));
+        %save(sprintf('%s%stmask_FD.txt',outputdir,outstr),'tmask_FD', '-ascii','-double','-tabs');
+        %writematrix(tmask_fFD,sprintf('%s%stmask_fFD.txt',outputdir,outstr));
+        writetable(table(tmask_fFD),sprintf('%s%stmask_fFD.txt',outputdir,outstr));
+        %save(sprintf('%s%stmask_fFD.txt',outputdir,outstr),'tmask_fFD', '-ascii','-double','-tabs');
         
         % some stats to keep track of
         good_run_FD(i) = sum(tmask_FD) > run_min;
@@ -142,20 +151,26 @@ for ses = sessions
     end
     
     % save out some general info
-    writematrix(good_run_FD,sprintf('%sgoodruns_FD.txt',outputdir));
+    %writematrix(good_run_FD,sprintf('%sgoodruns_FD.txt',outputdir));
+    writetable(table(good_run_FD'),sprintf('%sgoodruns_FD.txt',outputdir));
     %save(sprintf('%sgoodruns_FD.txt',outputdir),'good_run_FD', '-ascii', '-double', '-tabs');
-    writematrix(good_run_fFD, sprintf('%sgoodruns_fFD.txt',outputdir));
-    %save(sprintf('%sgoodruns_fFD.txt',outputdir),'good_run_fFD', '-ascii');
+    %writematrix(good_run_fFD, sprintf('%sgoodruns_fFD.txt',outputdir));
+    writetable(table(good_run_fFD'), sprintf('%sgoodruns_fFD.txt',outputdir));
+    %save(sprintf('%sgoodruns_fFD.txt',outputdir),'good_run_fFD', '-ascii','-double','-tabs');
     
-    writematrix(run_frame_nums_FD,sprintf('%sframenums_FD.txt',outputdir));
-    %save(sprintf('%sframenums_FD.txt',outputdir),'run_frame_nums_FD', '-ascii');
-    writematrix(run_frame_nums_fFD,sprintf('%sframenums_fFD.txt',outputdir));
-    %save(sprintf('%sframenums_fFD.txt',outputdir),'run_frame_nums_fFD', '-ascii');
+    %writematrix(run_frame_nums_FD,sprintf('%sframenums_FD.txt',outputdir));
+    writetable(table(run_frame_nums_FD'),sprintf('%sframenums_FD.txt',outputdir));
+    %save(sprintf('%sframenums_FD.txt',outputdir),'run_frame_nums_FD', '-ascii','-double','-tabs');
+    %writematrix(run_frame_nums_fFD,sprintf('%sframenums_fFD.txt',outputdir));
+    writetable(table(run_frame_nums_fFD'),sprintf('%sframenums_fFD.txt',outputdir));
+    %save(sprintf('%sframenums_fFD.txt',outputdir),'run_frame_nums_fFD', '-ascii','-double','-tabs');
     
-    writematrix(run_frame_per_FD,sprintf('%sframepers_FD.txt',outputdir));
+    %writematrix(run_frame_per_FD,sprintf('%sframepers_FD.txt',outputdir));
+    writetable(table(run_frame_per_FD'),sprintf('%sframepers_FD.txt',outputdir));
     %save(sprintf('%sframepers_FD.txt',outputdir),'run_frame_per_FD', '-ascii', '-double', '-tabs');
-    writematrix(run_frame_per_fFD,sprintf('%sframepers_fFD.txt',outputdir));
-    %save(sprintf('%sframepers_fFD.txt',outputdir),'run_frame_per_fFD', '-ascii');
+    %writematrix(run_frame_per_fFD,sprintf('%sframepers_fFD.txt',outputdir));
+    writetable(table(run_frame_per_fFD'),sprintf('%sframepers_fFD.txt',outputdir));
+    %save(sprintf('%sframepers_fFD.txt',outputdir),'run_frame_per_fFD', '-ascii','-double','-tabs');
     
     clear good_run_FD run_frame_nums_FD run_frame_per_FD;
     clear good_run_fFD run_frame_nums_fFD run_frame_per_fFD;
