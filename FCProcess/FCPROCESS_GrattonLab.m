@@ -81,7 +81,7 @@ fprintf('READING IN DATAFILE\n');
 numdatas=size(df.EXPsubjectID,1); %number of datasets to analyses (subs X sessions)
 
 for i=1:numdatas
-    QC(i).subject = df.EXPsubjectID{i,1}; %experiment subject ID
+    QC(i).subjectID = df.EXPsubjectID{i,1}; %experiment subject ID
     QC(i).session = df.session{i,1}; %session ID
     QC(i).condition = df.condition{i,1}; %condition type (rest or task)
     QC(i).TR = df.TR(i,1); %TR (in seconds)
@@ -115,7 +115,7 @@ for i = 1:length(numdatas)
         boldavgnii{i,r} = boldavg_fname;
         boldconf{i,r} = confounds_fname;
         boldtmask{i,r} = tmask_fname;
-        boldmot_fstart{i,r} = [conf_fstring1 'FDoutputs/' all_fstring2]; % in this case, just give path/start so I can load different versions
+        boldmot_folder{i,r} = [conf_fstring1 'FDoutputs/' all_fstring2]; % in this case, just give path/start so I can load different versions
         
         if ~exist(bolddata_fname)
             error(['Data does not exist. Check paths and FMRIPREP output for: ' bolddata_fname]);
@@ -300,53 +300,79 @@ pause(2);
 for i=1:numdatas
     
     % prepare target subject directory
-    QC(i).subdir=[outputDir '/' QC(i).vcnum ];
-    if exist(QC(i).subdir)
-        rmdir(QC(i).subdir,'s');
+    QC(i).subdir_out = sprintf('%s/sub-%s/',outputDir,QC(i).subjectID);
+    mkdir(QC(i).sessdir_out); %make the directory, but don't remove previous if it exists as you may be running sessions separately
+    
+    % prepare target session directory
+    QC(i).sessdir_out=sprintf('%s/ses-%02d/',QC(i).subdir_out,QC(i).session);
+    if exist(QC(i).sessdir_out) %remove the directory if it already exists
+        rmdir(QC(i).sessdir_out,'s');
     end
-    mkdir(QC(i).subdir);
+    mkdir(QC(i).sessdir_out); %make the directory
     
     % make links to atlas and seed data
-    QC(i).subatlasdir=[QC(i).subdir '/atlas/'];
-    if ~exist(QC(i).subatlasdir)
-        mkdir(QC(i).subatlasdir);
+    QC(i).subatlasdir_out=[QC(i).subdir '/anat/']; %directory with anatomical info CG = changed to BIDS-like
+    if ~exist(QC(i).subatlasdir_out)
+        mkdir(QC(i).subatlasdir_out);
     end
     
-    % set symbolic link to structural data
-    tanataveimg{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.img'];
-    tanataveifh{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.ifh'];
-    system([ 'ln -s ' anataveimg{i,1} ' ' tanataveimg{i,1}]);
-    system([ 'ln -s ' anataveifh{i,1} ' ' tanataveifh{i,1}]);
+    % set symbolic link to MPRAGE data
+    tmprnii{i,1} = [QC(i).subatlasdir_out '/sub-' QC(i).subjectID '_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz'];
+    system([ 'ln -s ' mprnii{i,1} ' ' tmprnii{i,1}]);
     
-    tmprimg{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.img'];
-    tmprifh{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.ifh'];
-    system([ 'ln -s ' mprimg{i,1} ' ' tmprimg{i,1}]);
-    system([ 'ln -s ' mprifh{i,1} ' ' tmprifh{i,1}]);
+    % load in MPRAGE 
+    QC(i).MPRAGE = load_nii(mprimg{i,1});
+    error('check this previous line');
     
-    system([ 'cp ' df.prmfile{i,1} ' ' QC(i).subdir '/fc.params' ]);
+    %%% CG: remove?
+%     tanataveimg{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.img'];
+%     tanataveifh{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.ifh'];
+%     system([ 'ln -s ' anataveimg{i,1} ' ' tanataveimg{i,1}]);
+%     system([ 'ln -s ' anataveifh{i,1} ' ' tanataveifh{i,1}]);
+%     
+%     tmprimg{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.img'];
+%     tmprifh{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_mpr_n1_' voxdim '_t88.4dfp.ifh'];
+%     system([ 'ln -s ' mprimg{i,1} ' ' tmprimg{i,1}]);
+%     system([ 'ln -s ' mprifh{i,1} ' ' tmprifh{i,1}]);
+%     
+%     system([ 'cp ' df.prmfile{i,1} ' ' QC(i).subdir '/fc.params' ]);
     
-    QC(i).MPRAGE=read_4dfpimg_HCP(mprimg{i,1});
-    QC(i).ANATAV=read_4dfpimg_HCP(anataveimg{i,1});
+    %QC(i).MPRAGE=read_4dfpimg_HCP(mprimg{i,1});
+    %QC(i).ANATAV=read_4dfpimg_HCP(anataveimg{i,1});
     
     % cycle through each BOLD run
     for j=1:size(QC(i).restruns,1)
         
+        % CG: keep structure more akin to BIDS
         % prepare and enter targetsubbolddir
-        QC(i).subbolddir{j}=cell2mat(strcat(QC(i).subdir,'/bold',QC(i).restruns(j,:)));
-        if ~exist(QC(i).subbolddir{j})
-            mkdir(QC(i).subbolddir{j});
-        end
-        cd(QC(i).subbolddir{j});
+%         QC(i).subbolddir{j}=cell2mat(strcat(QC(i).subdir,'/bold',QC(i).restruns(j,:)));
+%         if ~exist(QC(i).subbolddir{j})
+%             mkdir(QC(i).subbolddir{j});
+%         end
+%         cd(QC(i).subbolddir{j});
+
+        all_fstring = sprintf('sub-%s_ses-%02d_task-%s_run-%02d',QC(i).subject,QC(i).session,QC(i).cond,QC(i).runs(j));
+        QC(i).naming_str{j} = all_fstring; % keep a record of this string
         
+        tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-MNI152Lin2009cAsym_desc-preproc_bold.nii.gz'];
+        tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-MNI152Lin2009cAsym_boldref.nii.gz'];
+        tboldconf{i,j} = [QC(i).sessdir_out all_fstring2 '_desc-confounds_regressors.tsv'];
+        tboldmot_folder = [QC(i).sessdir_out 'FDoutputs/'];
+        system(['ln -s ' boldnii{i,j} ' ' tboldnii{i,j}]);
+        system(['ln -s ' boldavgnii{i,j} ' ' tboldavgnii{i,j}]); %this used to be created once per subject, now once per run with fmriprep
+        system(['ln -s ' boldconf{i,j} ' ' tboldconf{i,j}]);
+        system(['ln -s ' boldmot_folder{i,j} ' ' tboldmot_folder{i,j}]);
+        
+        % CG - delete below
         % set symbolic link to original data
-        tboldmat{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat'));
-        %tboldimg{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl.4dfp.img'));
-        %tboldifh{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl.4dfp.ifh'));
-        tboldimg{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.img'));
-        tboldifh{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.ifh'));
-        system([ 'ln -s ' boldmat{i,j} ' ' tboldmat{i,j}]);
-        system([ 'ln -s ' boldimg{i,j} ' ' tboldimg{i,j}]);
-        system([ 'ln -s ' boldifh{i,j} ' ' tboldifh{i,j}]);
+%         tboldmat{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat'));
+%         %tboldimg{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl.4dfp.img'));
+%         %tboldifh{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl.4dfp.ifh'));
+%         tboldimg{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.img'));
+%         tboldifh{i,j} = cell2mat(strcat(QC(i).subbolddir{j},'/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.ifh'));
+%         system([ 'ln -s ' boldmat{i,j} ' ' tboldmat{i,j}]);
+%         system([ 'ln -s ' boldimg{i,j} ' ' tboldimg{i,j}]);
+%         system([ 'ln -s ' boldifh{i,j} ' ' tboldifh{i,j}]);
     end
 end
 
@@ -356,23 +382,26 @@ end
 %%%% To make this modular, we are using LASTIMG to index the previous
 %%%% processed image. This allows us to pick and move processing steps
 
+
+%%%% CG: STOPPED HERE - need to figure out compute_defined without 4dfp
 stage=1;
 LASTCONC{stage}= '333';
 allends='333';
 
 % initialize LASTIMG to the 333 image
 for i=1:numdatas
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).runs,1)
         %CG: changing the way this works to actually load our image of interest
         %LASTIMG{i,j,stage}=cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d_uwrp_atl'));
-        LASTIMG{i,j,stage}=cell2mat(strcat(QC(i).subbolddir{j},'/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:)'));
+        %LASTIMG{i,j,stage}=cell2mat(strcat(QC(i).subbolddir{j},'/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:)'));
+        LASTIMG{i,j,stage} = tboldnii{i,j};
     end
     cd(QC(i).subdir);
     
     % write a concfile
     fid=fopen([LASTCONC{stage} '.conc'],'w');
-    fprintf(fid,'number_of_files: %d\n',size(QC(i).restruns,1));
-    for j=1:size(QC(i).restruns,1)
+    fprintf(fid,'number_of_files: %d\n',size(QC(i).runs,1));
+    for j=1:size(QC(i).runs,1)
         fprintf(fid,'\tfile:%s\n',[LASTIMG{i,j,stage} '.4dfp.img' ]);
     end
     fclose(fid);
@@ -380,7 +409,7 @@ for i=1:numdatas
     % write a concfile JUST for compute defined - CG
     fid=fopen([LASTCONC{stage} '_computedefined.conc'],'w');
     fprintf(fid,'number_of_files: %d\n',size(QC(i).restruns,1));
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).runs,1)
         pre_GLM_img= cell2mat(strcat(df.filepath{i,1},'/orig_files/', QC(i).vcnum, '_b', task, QC(i).restruns(j,:), '_faln_dbnd_xr3d_uwrp_atl'));
         fprintf(fid,'\tfile:%s.4dfp.img\n',pre_GLM_img);
     end
