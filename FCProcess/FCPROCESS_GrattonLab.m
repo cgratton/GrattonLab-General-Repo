@@ -1,4 +1,4 @@
-function [allends switches] = FCPROCESS_iNetworks(datafile,outputDir,tmasktype,freesurferfile,varargin)
+function [allends switches] = FCPROCESS_iNetworks(datafile,outputDir,varargin)
 % This script is the fcprocessing script, originally from the Petersen
 % lab, now for the Gratton lab.
 % FCPROCESS(datalist,targetdir,tmasktype,freesurferlist)
@@ -63,34 +63,43 @@ function [allends switches] = FCPROCESS_iNetworks(datafile,outputDir,tmasktype,f
 
 %% IMPORTANT VARIABLES
 %avidir = '/data/cninds01/data2/nil-tools';  %CG - replace with AFNI functions?
-avidir = '/projects/b1081/Scripts/4dfp_tools/';  %CG - replace with AFNI functions?
+%avidir = '/projects/b1081/Scripts/4dfp_tools/';  %CG - replace with AFNI functions?
 % % %releasedir = '/data/petsun4/data1/solaris'; CG - get AFNI functions?
 % % %roidir='/home/usr/fidl/lib/'; CG - do we ever use this?
-startdir=pwd;
-voxdim='333'; % make this an input? Add a resampling step to prep data to this (or 222) res?
-switches.WMero=4; % default erosion for freesurfer WM mask. Check before this that this looks good
-switches.CSFero=1; % default erosion for freesurfer CSF mask. Check before this that this looks good.
+%startdir=pwd;
+tmasktype = 'regular'; %'ones' or something else (ones = take everything except short periods at the start of each scan
+space = 'MNI152NLin6Asym';
+res = ''; %'','res-2' or 'res-3' (voxel resolutions for output)
+%switches.WMero=4; % default erosion for freesurfer WM mask. Check before this that this looks good
+%switches.CSFero=1; % default erosion for freesurfer CSF mask. Check before this that this looks good.
+GMthresh = 0.5; %these and following should only really matter for grayplot
+WMthresh = 0.8; %only take voxels you're pretty sure are WM/CSF
+CSFthresh = 0.8;
 set(0, 'DefaultFigureVisible', 'off'); % puts figures in the background while running
 
 
 %% READ IN DATALIST
 
 % read in the subject data including location, vcnum, and boldruns
-[df.EXPsubjectID df.session df.condition df.TR df.TRskip df.topDir df.dataFolder df.confoundsFolder df.FDtype df.runs] = textread(datafile,'%s%d%s%f%d%s%s%s%s%s');
-fprintf('READING IN DATAFILE\n');
-numdatas=size(df.EXPsubjectID,1); %number of datasets to analyses (subs X sessions)
+df = readtable(datafile); %reads into a table structure, with datafile top row as labels
+numdatas=size(df.sub,1); %number of datasets to analyses (subs X sessions)
 
 for i=1:numdatas
-    QC(i).subjectID = df.EXPsubjectID{i,1}; %experiment subject ID
-    QC(i).session = df.session{i,1}; %session ID
-    QC(i).condition = df.condition{i,1}; %condition type (rest or task)
+    QC(i).subjectID = df.sub{i}; %experiment subject ID
+    QC(i).session = df.sess(i); %session ID
+    QC(i).condition = df.task{i}; %condition type (rest or name of task)
     QC(i).TR = df.TR(i,1); %TR (in seconds)
-    QC(i).TRskip = df.TRskip(i,1); %number of frames to skip
-    QC(i).topDir = df.topDir{i,1}; %initial part of directory structure
-    QC(i).dataFolder = df.dataFolder{i,1}; % folder for data inputs (assume BIDS style organization otherwise)
-    QC(i).confoundsFolder = df.confoundsFolder{i,1}; % folder for confound inputs (assume BIDS organization)
+    QC(i).TRskip = df.dropFr(i); %number of frames to skip
+    QC(i).topDir = df.topDir{i}; %initial part of directory structure
+    QC(i).dataFolder = df.dataFolder{i}; % folder for data inputs (assume BIDS style organization otherwise)
+    QC(i).confoundsFolder = df.confoundsFolder{i}; % folder for confound inputs (assume BIDS organization)
     QC(i).FDtype = df.FDtype{i,1}; %use FD or fFD for tmask, etc?
-    QC(i).runs = str2double(regexp(df.runs{i,1},',','split')); % get runs, converting to numerical array
+    QC(i).runs = str2double(regexp(df.runs{i},',','split')); % get runs, converting to numerical array
+    QC(i).space = space;
+    QC(i).res = res;
+    QC(i).GMthresh = GMthresh;
+    QC(i).WMthresh = WMthresh;
+    QC(i).CSFthresh = CSFthresh;
 end
 
 %% CHECK TEMPORAL MASKS
@@ -103,8 +112,9 @@ for i = 1:length(numdatas)
         conf_fstring1 = sprintf('%s/%s/fmriprep/sub-%s/ses-%02d/func/',QC(i).topDir,QC(i).confoundsFolder,QC(i).subject,QC(i).session);
         all_fstring2 = sprintf('sub-%s_ses-%02d_task-%s_run-%02d',QC(i).subject,QC(i).session,QC(i).cond,QC(i).runs(r));
         
-        bolddata_fname = [data_fstring1 all_fstring2 '_space-MNI152Lin2009cAsym_desc-preproc_bold.nii.gz'];
-        boldavg_fname = [data_fstring1 all_fstring2 '_space-MNI152Lin2009cAsym_boldref.nii.gz'];
+        bolddata_fname = [data_fstring1 all_fstring2 '_space-' space res '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
+        boldavg_fname = [conf_fstring1 all_fstring2 '_space-' space res '_boldref.nii.gz']; %referent for alignment
+        boldmask_fname = [conf_fstring1 all_fstring2 '_space-' space res '_desc-brain_mask.nii.gz']; %fmriprep mask
         confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_regressors.tsv'];
         tmask_fname = [conf_fstring1 'FDoutputs/' all_fstring2 'desc-tmask_' QC(i).FDtype '.txt']; %assume this is in confounds folder
         
@@ -113,6 +123,7 @@ for i = 1:length(numdatas)
         %boldifh{i,j} = cell2mat(strcat(df.filepath{i,1},'/residuals/',subid,'_',task,'_',QC(i).vcnum,'_res_b',QC(i).restruns(j,:),'.4dfp.ifh'));
         boldnii{i,r} = bolddata_fname;
         boldavgnii{i,r} = boldavg_fname;
+        boldmasknii{i,r} = boldmask_fname;
         boldconf{i,r} = confounds_fname;
         boldtmask{i,r} = tmask_fname;
         boldmot_folder{i,r} = [conf_fstring1 'FDoutputs/' all_fstring2]; % in this case, just give path/start so I can load different versions
@@ -122,7 +133,11 @@ for i = 1:length(numdatas)
         end
         
         if ~exist(boldavg_fname)
-            error(['Bold ref does not exist. Check paths and FMRIPREP output for: ' bolddata_fname]);
+            error(['Bold ref does not exist. Check paths and FMRIPREP output for: ' boldref_fname]);
+        end
+        
+        if ~exist(boldmask_fname)
+            error(['Bold mask does not exist. Check paths and FMRIPREP output for: ' boldmask_fname]);
         end
         
         if ~exist(confounds_fname)
@@ -139,7 +154,7 @@ for i = 1:length(numdatas)
     end
     
     % there is only one anatomy target across all runs and sessions
-    mpr_fname = sprintf('%s/%s/fmriprep/sub-%s/anat/sub-%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz',QC(i).topDir,QC(i).dataFolder,QC(i).subject,QC(i).subject);
+    mpr_fname = sprintf('%s/%s/fmriprep/sub-%s/anat/sub-%s_space-%s%s_desc-preproc_T1w.nii.gz',QC(i).topDir,QC(i).dataFolder,QC(i).subject,QC(i).subject,space,res);
     mprnii{i,1} = mpr_fname;
     
     if ~exist(mpr_fname)
@@ -174,23 +189,23 @@ if length(varargin) > 0
             switches.lopasscutoff=.08;
             switches.hipasscutoff=.009;
             switches.order=1;
-            switches.doblur=0;
+            switches.doblur=0; %smooth on the surface
             switches.blurkernel=0;
-        case 'defaults1'
-            switches.doregression=1;
-            switches.regressiontype=1;
-            switches.motionestimates=2;
-            switches.WM=1;
-            switches.V=1;
-            switches.GS=1;
-            switches.dointerpolate=0;
-            switches.dobandpass=0;
-            switches.temporalfiltertype=0;
-            switches.lopasscutoff=0;
-            switches.hipasscutoff=0;
-            switches.order=0;
-            switches.doblur=0;
-            switches.blurkernel=0;
+%         case 'defaults1' % shouldn't need this one
+%             switches.doregression=1;
+%             switches.regressiontype=1;
+%             switches.motionestimates=2;
+%             switches.WM=1;
+%             switches.V=1;
+%             switches.GS=1;
+%             switches.dointerpolate=0;
+%             switches.dobandpass=0;
+%             switches.temporalfiltertype=0;
+%             switches.lopasscutoff=0;
+%             switches.hipasscutoff=0;
+%             switches.order=0;
+%             switches.doblur=0; % do smoothing on the surface
+%             switches.blurkernel=0;
         case 'special'
             switches = varargin{3};
     end
@@ -317,12 +332,13 @@ for i=1:numdatas
     end
     
     % set symbolic link to MPRAGE data
-    tmprnii{i,1} = [QC(i).subatlasdir_out '/sub-' QC(i).subjectID '_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz'];
+    tmprnii{i,1} = [QC(i).subatlasdir_out '/sub-' QC(i).subjectID '_space-' space res '_desc-preproc_T1w.nii.gz'];
     system([ 'ln -s ' mprnii{i,1} ' ' tmprnii{i,1}]);
     
     % load in MPRAGE 
-    QC(i).MPRAGE = load_nii(mprimg{i,1});
-    error('check this previous line');
+    tmp = load_nii(mprimg{i,1});
+    QC(i).MPRAGE = tmp.img;
+    clear tmp;
     
     %%% CG: remove?
 %     tanataveimg{i,1} = [ QC(i).subatlasdir '/' QC(i).vcnum '_faln_dbnd_xr3d_uwrp_atl_ave.4dfp.img'];
@@ -354,11 +370,14 @@ for i=1:numdatas
         all_fstring = sprintf('sub-%s_ses-%02d_task-%s_run-%02d',QC(i).subject,QC(i).session,QC(i).cond,QC(i).runs(j));
         QC(i).naming_str{j} = all_fstring; % keep a record of this string
         
-        tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-MNI152Lin2009cAsym_desc-preproc_bold.nii.gz'];
-        tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-MNI152Lin2009cAsym_boldref.nii.gz'];
+        tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_desc-preproc_bold.nii.gz'];
+        tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_boldref.nii.gz'];
+        tboldmasknii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_desc-brain_mask.nii.gz'];
         tboldconf{i,j} = [QC(i).sessdir_out all_fstring2 '_desc-confounds_regressors.tsv'];
-        tboldmot_folder = [QC(i).sessdir_out 'FDoutputs/'];
+        tboldmot_folder{i,j} = [QC(i).sessdir_out 'FDoutputs/'];
+
         system(['ln -s ' boldnii{i,j} ' ' tboldnii{i,j}]);
+        system(['ln -s ' boldmasknii{i,j} ' ' tboldmasknii{i,j}]);
         system(['ln -s ' boldavgnii{i,j} ' ' tboldavgnii{i,j}]); %this used to be created once per subject, now once per run with fmriprep
         system(['ln -s ' boldconf{i,j} ' ' tboldconf{i,j}]);
         system(['ln -s ' boldmot_folder{i,j} ' ' tboldmot_folder{i,j}]);
@@ -385,10 +404,10 @@ end
 
 %%%% CG: STOPPED HERE - need to figure out compute_defined without 4dfp
 stage=1;
-LASTCONC{stage}= '333';
-allends='333';
+LASTCONC{stage}= 'fmriprep';
+allends='fmriprep';
 
-% initialize LASTIMG to the 333 image
+% initialize LASTIMG to the fmriprep starting image
 for i=1:numdatas
     for j=1:size(QC(i).runs,1)
         %CG: changing the way this works to actually load our image of interest
@@ -398,120 +417,79 @@ for i=1:numdatas
     end
     cd(QC(i).subdir);
     
-    % write a concfile
-    fid=fopen([LASTCONC{stage} '.conc'],'w');
-    fprintf(fid,'number_of_files: %d\n',size(QC(i).runs,1));
-    for j=1:size(QC(i).runs,1)
-        fprintf(fid,'\tfile:%s\n',[LASTIMG{i,j,stage} '.4dfp.img' ]);
-    end
-    fclose(fid);
+    % CG do we need this? can it be removed?
+%     % write a concfile
+%     fid=fopen([LASTCONC{stage} '.conc'],'w');
+%     fprintf(fid,'number_of_files: %d\n',size(QC(i).runs,1));
+%     for j=1:size(QC(i).runs,1)
+%         fprintf(fid,'\tfile:%s\n',[LASTIMG{i,j,stage}]);
+%     end
+%     fclose(fid);
     
-    % write a concfile JUST for compute defined - CG
-    fid=fopen([LASTCONC{stage} '_computedefined.conc'],'w');
-    fprintf(fid,'number_of_files: %d\n',size(QC(i).restruns,1));
-    for j=1:size(QC(i).runs,1)
-        pre_GLM_img= cell2mat(strcat(df.filepath{i,1},'/orig_files/', QC(i).vcnum, '_b', task, QC(i).restruns(j,:), '_faln_dbnd_xr3d_uwrp_atl'));
-        fprintf(fid,'\tfile:%s.4dfp.img\n',pre_GLM_img);
-    end
-    fclose(fid);
+    % skipping this step - using brain mask instead
+%     % write a concfile JUST for compute defined - CG
+%     fid=fopen([LASTCONC{stage} '_computedefined.conc'],'w');
+%     fprintf(fid,'number_of_files: %d\n',size(QC(i).restruns,1));
+%     for j=1:size(QC(i).runs,1)
+%         pre_GLM_img= cell2mat(strcat(df.filepath{i,1},'/orig_files/', QC(i).vcnum, '_b', task, QC(i).restruns(j,:), '_faln_dbnd_xr3d_uwrp_atl'));
+%         fprintf(fid,'\tfile:%s.4dfp.img\n',pre_GLM_img);
+%     end
+%     fclose(fid);
     
 end
 
 
 %% COMPUTE DEFINED VOXELS FOR THE BOLD RUNS
 
+% CG edits: this used to use 4dfp compute_defined_4dfp function
+% Now, using fmriprep output masks and combining the BOLD brain masks into
+% a single union mask to only take voxels that are defined in every
+% analyzed run of a subject
 for i=1:numdatas
-    cd(QC(i).subdir);
-    fprintf('COMPUTE DEFINED VOXELS\t%d\t%s\n',i,QC(i).vcnum);
-    %commands=['compute_defined_4dfp ' QC(i).subdir '/' LASTCONC{stage} '.conc >/dev/null' ];
-    commands=['compute_defined_4dfp ' QC(i).subdir '/' LASTCONC{stage} '_computedefined.conc >/dev/null' ];
-    system(commands);
-    pause(5);
-    %QC(i).DFNDVOXELS=read_4dfpimg_HCP([LASTCONC{stage} '_dfnd.4dfp.img']);
-    QC(i).DFNDVOXELS=read_4dfpimg_HCP([LASTCONC{stage} '_computedefined_dfnd.4dfp.img']);
+%     cd(QC(i).subdir);
+%     fprintf('COMPUTE DEFINED VOXELS\t%d\t%s\n',i,QC(i).vcnum);
+%     %commands=['compute_defined_4dfp ' QC(i).subdir '/' LASTCONC{stage} '.conc >/dev/null' ];
+%     commands=['compute_defined_4dfp ' QC(i).subdir '/' LASTCONC{stage} '_computedefined.conc >/dev/null' ];
+%     system(commands);
+%     pause(5);
+%     %QC(i).DFNDVOXELS=read_4dfpimg_HCP([LASTCONC{stage} '_dfnd.4dfp.img']);
+%     QC(i).DFNDVOXELS=read_4dfpimg_HCP([LASTCONC{stage} '_computedefined_dfnd.4dfp.img']);
+
+    error('need to set this up');
+    QC().DFNDVOXELS = create_union_mask(boldmasknii{i,:});
+    
 end
 
 
 %% CHECK FOR NUISANCE SEEDS
+% CG - changing to point to ouputs to fmriprep
+% May need to edit if we aren't happy with those timeseries
+% CG2 - this could be where we choose to potentially load a design matrix
+% as well for task data
 
-%if switches.doregression
 
+% DO WE NEED ANY OF THIS? Yes for grayplots?
 needtostop=0;
-switch switches.regressiontype
-    %         case 0 % classic WashU seeds in WM and V
-    %
-    %             for i=1:numsubs
-    %                 QC(i).GLMmaskfile=['//data/hcp-zfs/home/laumannt/Poldrome/shared_for_washu/freesurfer_washu/FREESURFER_fs_LR/sub013/7112b_fs_LR/brainmask_fs_222.4dfp.img'];% ['/home/usr/fidl/lib/glm_atlas_mask_' voxdim '.4dfp.img'];
-    %                 QC(i).WMmaskfile=['/home/usr/fidl/lib/small_WM.4dfp.img'];
-    %                 QC(i).CSFmaskfile=['/home/usr/fidl/lib/711-2B_lat_vent_' voxdim '.4dfp.img'];
-    %             end
-    %
-    %             for i=1:numsubs
-    %                 fprintf('CHECKING NUISANCE SEEDS\t%d\t%s\n',i,QC(i).vcnum);
-    %                 needtostop=0;
-    %
-    %                 tmpmask=read_4dfpimg_HCP(QC(i).GLMmaskfile);
-    %                 tmpmask=tmpmask & QC(i).DFNDVOXELS;
-    %                 if nnz(tmpmask)==0
-    %                     fprintf('%s is empty!\n',QC(i).GLMmaskfile);
-    %                     needtostop=1;
-    %                 else
-    %                     QC(i).GLMMASK=~~tmpmask;
-    %                 end
-    %
-    %                 tmpmask=read_4dfpimg_HCP(QC(i).WMmaskfile);
-    %                 tmpmask=tmpmask & QC(i).DFNDVOXELS;
-    %                 if nnz(tmpmask)==0
-    %                     fprintf('%s is empty!\n',QC(i).WMmaskfile);
-    %                     needtostop=1;
-    %                 else
-    %                     QC(i).WMMASK=~~tmpmask;
-    %                 end
-    %
-    %                 tmpmask=read_4dfpimg_HCP(QC(i).CSFmaskfile);
-    %                 tmpmask=tmpmask & QC(i).DFNDVOXELS;
-    %                 if nnz(tmpmask)==0
-    %                     fprintf('%s is empty!\n',QC(i).CSFmaskfile);
-    %                     needtostop=1;
-    %                 else
-    %                     QC(i).CSFMASK=~~tmpmask;
-    %                 end
-    %
-    %                 if needtostop
-    %                     error('Fix empty masks.\n');
-    %                 end
-    %             end
-    %
-    %             % create a holding variable for seeds and labels
-    %             for i=1:numsubs
-    %                 seedcount=0;
-    %                 QC(i).seedhold=[];
-    %                 if switches.GS
-    %                     seedcount=seedcount+1;
-    %                     QC(i).seedhold=[QC(i).seedhold QC(i).GLMMASK];
-    %                     QC(i).seedholdlabel{seedcount}='WB';
-    %                 end
-    %                 if switches.WM
-    %                     seedcount=seedcount+1;
-    %                     QC(i).seedhold=[QC(i).seedhold QC(i).WMMASK];
-    %                     QC(i).seedholdlabel{seedcount}='WM';
-    %                 end
-    %                 if switches.V
-    %                     seedcount=seedcount+1;
-    %                     QC(i).seedhold=[QC(i).seedhold QC(i).CSFMASK];
-    %                     QC(i).seedholdlabel{seedcount}='CSF';
-    %                 end
-    %             end
-    
+switch switches.regressiontype 
     case {0,1,9} % freesurfer masks of WM and V
-        disp('hello')
+        
         % set basic names
         for i=1:numdatas
-            QC(i).GLMmaskfile=['/data/cn4/laumannt/Standard/glm_atlas_mask_' voxdim '.4dfp.img'];
-            QC(i).WMmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_cerebralwm_ero' num2str(switches.WMero) '_mask_' voxdim '.4dfp.img'];
-            QC(i).CSFmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_CSF_ero' num2str(switches.CSFero) '_mask_' voxdim '.4dfp.img'];
-            QC(i).WBmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_brainmask_mask_' voxdim '.4dfp.img'];
-            QC(i).GREYmaskfile=[ QC(i).fsdir '/nusmask/aseg_GM_mask_' voxdim '.4dfp.img'];
+            
+            anat_string = [QC(i).topDir '/' QC(i).confoundsFolder '/fmriprep/sub-' QC(i).subjectID '/anat/'];
+            
+            QC(i).GLMmaskfile = ['~/.cache/templateflow/tpl-' space '/tpl-' space '_' res '_desc-brain_mask.nii.gz']; %put this in Atlas folder?
+            QC(i).WMmaskfile = [anat_string 'sub-' QC(i).subjectID '_space-' space res '_label-WM-probseg.nii.gz'];
+            QC(i).CSFmaskfile = [anat_string 'sub-' QC(i).subjectID '_space-' space res '_label-CSF-probseg.nii.gz'];
+            QC(i).WBmaskfile = [anat_string 'sub-' QC(i).subjectID '_space-' space res '_desc-brain_mask.nii.gz'];
+            QC(i).GREYmaskfile = [anat_string 'sub-' QC(i).subjectID '_space-' space res '_label-GM-probseg.nii.gz'];
+            
+            % CG - replace with typical fmriprep output (above)
+%             QC(i).GLMmaskfile=['/data/cn4/laumannt/Standard/glm_atlas_mask_' voxdim '.4dfp.img'];
+%             QC(i).WMmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_cerebralwm_ero' num2str(switches.WMero) '_mask_' voxdim '.4dfp.img'];
+%             QC(i).CSFmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_CSF_ero' num2str(switches.CSFero) '_mask_' voxdim '.4dfp.img'];
+%             QC(i).WBmaskfile=[ QC(i).fsdir '/nusmask/aparc+aseg_brainmask_mask_' voxdim '.4dfp.img'];
+%             QC(i).GREYmaskfile=[ QC(i).fsdir '/nusmask/aseg_GM_mask_' voxdim '.4dfp.img'];
         end
         
         % check for existence of mask files
@@ -524,10 +502,10 @@ switch switches.regressiontype
                 needtostop=1;
             end
             
-            if ~exist([ QC(i).fsdir '/' ])
-                fprintf('No FREESURFER folder! Subject %s needs to have mpr2caret run\n',QC(i).vcnum);
-                needtostop=1;
-            end
+%             if ~exist([ QC(i).fsdir '/' ])
+%                 fprintf('No FREESURFER folder! Subject %s needs to have mpr2caret run\n',QC(i).vcnum);
+%                 needtostop=1;
+%             end
             if ~exist(QC(i).WBmaskfile)
                 fprintf('%s missing!\n',QC(i).WBmaskfile);
                 needtostop=1;
@@ -545,101 +523,110 @@ switch switches.regressiontype
                 needtostop=1;
             end
             if needtostop
-                error('Fix the FREESURFER masks.\n');
+                error('Fix the BRAIN masks.\n');
             end
         end
         
         % ensure masks contain something, relax erosions if not
         for i=1:numdatas
-            needtostop=0;
+            %needtostop=0;
             
-            tmpmask=read_4dfpimg(QC(i).GLMmaskfile);
-            tmpmask=tmpmask & QC(i).DFNDVOXELS;
-            if nnz(tmpmask)==0
-                fprintf('%s is empty!\n',QC(i).GLMmaskfile);
-                needtostop=1;
-            else
-                QC(i).GLMMASK=~~tmpmask;
-            end
+            tmpmask=load_nii(QC(i).GLMmaskfile);            
+            %tmpmask=read_4dfpimg(QC(i).GLMmaskfile);
+            tmpmask=tmpmask.img & QC(i).DFNDVOXELS;
+%             if nnz(tmpmask)==0
+%                 fprintf('%s is empty!\n',QC(i).GLMmaskfile);
+%                 needtostop=1;
+%             else
+                 QC(i).GLMMASK=~~tmpmask;
+%             end
             
-            tmpmask=read_4dfpimg_HCP(QC(i).WBmaskfile);
-            tmpmask=tmpmask & QC(i).DFNDVOXELS;
-            if nnz(tmpmask)==0
-                fprintf('%s is empty!\n',QC(i).WBmaskfile);
-                needtostop=1;
-            else
-                QC(i).WBMASK=~~tmpmask;
-            end
+            %tmpmask=read_4dfpimg_HCP(QC(i).WBmaskfile);
+            tmpmask = load_nii(QC(i).WBmaskfile);
+            tmpmask=tmpmask.img & QC(i).DFNDVOXELS;
+%             if nnz(tmpmask)==0
+%                 fprintf('%s is empty!\n',QC(i).WBmaskfile);
+%                 needtostop=1;
+%             else
+                 QC(i).WBMASK=~~tmpmask;
+%             end
             
-            tmpmask=read_4dfpimg_HCP(QC(i).GREYmaskfile);
-            tmpmask=tmpmask & QC(i).DFNDVOXELS;
-            if nnz(tmpmask)==0
-                fprintf('%s is empty!\n',QC(i).GREYmaskfile);
-                needtostop=1;
-            else
-                QC(i).GMMASK=~~tmpmask;
-            end
+            %tmpmask=read_4dfpimg_HCP(QC(i).GREYmaskfile);
+            tmpmask = load_nii(QC(i).GREYmaskfile);
+            tmpmask = (tmpmask.img > GMthresh) & QC(i).DFNDVOXELS; 
+%             if nnz(tmpmask)==0
+%                 fprintf('%s is empty!\n',QC(i).GREYmaskfile);
+%                 needtostop=1;
+%             else
+                 QC(i).GMMASK=~~tmpmask;
+%             end
+            QC(i).GMthresh = GMthresh;
             
-            tmpmask=read_4dfpimg_HCP(QC(i).WMmaskfile);
-            tmpmask=tmpmask & QC(i).DFNDVOXELS;
-            tmpWMero=switches.WMero;
-            while nnz(tmpmask)==0
-                tmpWMero=tmpWMero-1;
-                if tmpWMero==-1
-                    fprintf('Subject %s has no white matter voxels!\n',QC(i).vcnum)
-                    needtostop=1;
-                    break;
-                end
-                fprintf('Reducing WM erosion to %d; zero voxels in %s\n',tmpWMero,QC(i).WMmaskfile);
-                QC(i).WMmaskfile = [ QC(i).fsdir '/nusmask/aparc+aseg_cerebralwm_ero' num2str(tmpWMero) '_mask_' voxdim '.4dfp.img'];
-                tmpmask=read_4dfpimg_HCP(QC(i).WMmaskfile);
-                tmpmask=tmpmask & QC(i).DFNDVOXELS;
-            end
+            %tmpmask=read_4dfpimg_HCP(QC(i).WMmaskfile);
+            tmpmask = load_nii(QC(i).WMmaskfile);
+            tmpmask = (tmpmask.img > WMthresh) & QC(i).DFNDVOXELS;
+%             tmpWMero=switches.WMero;
+%             while nnz(tmpmask)==0
+%                 tmpWMero=tmpWMero-1;
+%                 if tmpWMero==-1
+%                     fprintf('Subject %s has no white matter voxels!\n',QC(i).vcnum)
+%                     needtostop=1;
+%                     break;
+%                 end
+%                 fprintf('Reducing WM erosion to %d; zero voxels in %s\n',tmpWMero,QC(i).WMmaskfile);
+%                 QC(i).WMmaskfile = [ QC(i).fsdir '/nusmask/aparc+aseg_cerebralwm_ero' num2str(tmpWMero) '_mask_' voxdim '.4dfp.img'];
+%                 tmpmask=read_4dfpimg_HCP(QC(i).WMmaskfile);
+%                 tmpmask=tmpmask & QC(i).DFNDVOXELS;
+%             end
             QC(i).WMMASK=~~tmpmask;
-            QC(i).WMero=tmpWMero;
+            %QC(i).WMero=tmpWMero;
+            QC(i).WMthresh = WMthresh;
             
-            tmpmask=read_4dfpimg_HCP(QC(i).CSFmaskfile);
-            tmpmask=tmpmask & QC(i).DFNDVOXELS;
-            tmpCSFero=switches.CSFero;
-            while nnz(tmpmask)==0
-                tmpCSFero=tmpCSFero-1;
-                if tmpCSFero==-1
-                    fprintf('Subject %s has no CSF voxels!\n',QC(i).vcnum)
-                    needtostop=1;
-                    break;
-                end
-                fprintf('Reducing CSF erosion to %d; zero voxels in %s\n',tmpCSFero,QC(i).CSFmaskfile);
-                QC(i).CSFmaskfile = [ QC(i).fsdir '/nusmask/aparc+aseg_cerebralwm_ero' num2str(tmpCSFero) '_mask_' voxdim '.4dfp.img'];
-                tmpmask=read_4dfpimg_HCP(QC(i).CSFmaskfile);
-            end
+            %tmpmask=read_4dfpimg_HCP(QC(i).CSFmaskfile);
+            tmpmask = load_nii(QC(i).CSFmaskfile);
+            tmpmask = (tmpmask.img>CSFthresh) & QC(i).DFNDVOXELS;
+%             tmpCSFero=switches.CSFero;
+%             while nnz(tmpmask)==0
+%                 tmpCSFero=tmpCSFero-1;
+%                 if tmpCSFero==-1
+%                     fprintf('Subject %s has no CSF voxels!\n',QC(i).vcnum)
+%                     needtostop=1;
+%                     break;
+%                 end
+%                 fprintf('Reducing CSF erosion to %d; zero voxels in %s\n',tmpCSFero,QC(i).CSFmaskfile);
+%                 QC(i).CSFmaskfile = [ QC(i).fsdir '/nusmask/aparc+aseg_cerebralwm_ero' num2str(tmpCSFero) '_mask_' voxdim '.4dfp.img'];
+%                 tmpmask=read_4dfpimg_HCP(QC(i).CSFmaskfile);
+%             end
             QC(i).CSFMASK=~~tmpmask;
-            QC(i).CSFero=tmpCSFero;
+            %QC(i).CSFero=tmpCSFero;
+            QC(i).CSFthresh = CSFthresh;
             
-            if needtostop
-                error('Fix empty masks.\n');
-            end
+%             if needtostop
+%                 error('Fix empty masks.\n');
+%             end
         end
         
+        % CG - commenting out below, since we shouldn't need this
         % create a holding variable for seeds and labels
-        for i=1:numdatas
-            seedcount=0;
-            QC(i).seedhold=[];
-            if switches.GS
-                seedcount=seedcount+1;
-                QC(i).seedhold=[QC(i).seedhold QC(i).WBMASK];
-                QC(i).seedholdlabel{seedcount}='WB';
-            end
-            if switches.WM
-                seedcount=seedcount+1;
-                QC(i).seedhold=[QC(i).seedhold QC(i).WMMASK];
-                QC(i).seedholdlabel{seedcount}='WM';
-            end
-            if switches.V
-                seedcount=seedcount+1;
-                QC(i).seedhold=[QC(i).seedhold QC(i).CSFMASK];
-                QC(i).seedholdlabel{seedcount}='CSF';
-            end
-        end
+%         for i=1:numdatas
+%             seedcount=0;
+%             QC(i).seedhold=[];
+%             if switches.GS
+%                 seedcount=seedcount+1;
+%                 QC(i).seedhold=[QC(i).seedhold QC(i).WBMASK];
+%                 QC(i).seedholdlabel{seedcount}='WB';
+%             end
+%             if switches.WM
+%                 seedcount=seedcount+1;
+%                 QC(i).seedhold=[QC(i).seedhold QC(i).WMMASK];
+%                 QC(i).seedholdlabel{seedcount}='WM';
+%             end
+%             if switches.V
+%                 seedcount=seedcount+1;
+%                 QC(i).seedhold=[QC(i).seedhold QC(i).CSFMASK];
+%                 QC(i).seedholdlabel{seedcount}='CSF';
+%             end
+%         end
         
     case 2 % external 4dfp of regressor ROIs
         
@@ -652,96 +639,117 @@ end
 
 
 %% LINK NUISANCE SEEDS
-
-for i=1:numdatas
-    
-    QC(i).subseeddir=[QC(i).subdir '/nusseeds/'];
-    if ~exist(QC(i).subseeddir)
-        mkdir(QC(i).subseeddir);
-    end
-    
-    cd(QC(i).subdir);
-    system(['mv ' LASTCONC{stage} '_dfnd.* ' QC(i).subseeddir ]);
-    
-    %   if switches.doregression
-    switch switches.regressiontype
-        %             case 0
-        %                 [pth tmpseedimg]=fileparts(QC(i).GLMmaskfile);
-        %                 system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-        %                 system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-        %                 [pth tmpseedimg]=fileparts(QC(i).WMmaskfile);
-        %                 system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-        %                 system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-        %                 [pth tmpseedimg]=fileparts(QC(i).CSFmaskfile);
-        %                 system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-        %                 system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-        %                 write_4dfpimg(QC(i).seedhold,[ QC(i).subseeddir '/usedseeds.4dfp.img'],'bigendian');
-        %                 write_4dfpifh_222([ QC(i).subseeddir '/usedseeds.4dfp.img'],size(QC(i).seedhold,2),'bigendian',128,128,75,2,2,2);
-        %
-        case {0,1,9}
-            [pth tmpseedimg]=fileparts(QC(i).GLMmaskfile);
-            system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-            system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-            [pth tmpseedimg]=fileparts(QC(i).WMmaskfile);
-            system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-            system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-            [pth tmpseedimg]=fileparts(QC(i).CSFmaskfile);
-            system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-            system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-            [pth tmpseedimg]=fileparts(QC(i).GREYmaskfile);
-            system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-            system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-            [pth tmpseedimg]=fileparts(QC(i).WBmaskfile);
-            system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
-            system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
-            write_4dfpimg(QC(i).seedhold,[ QC(i).subseeddir '/usedseeds.4dfp.img'],'bigendian');
-            write_4dfpifh([ QC(i).subseeddir '/usedseeds.4dfp.img'],size(QC(i).seedhold,2),'bigendian',128,128,75,2,2,2);
-            
-        case 2
-            
-    end
-end
-%end
+% CG - I don't think we need this any more
+% for i=1:numdatas
+%     
+%     QC(i).subseeddir=[QC(i).subdir '/nusseeds/'];
+%     if ~exist(QC(i).subseeddir)
+%         mkdir(QC(i).subseeddir);
+%     end
+%     
+%     cd(QC(i).subdir);
+%     system(['mv ' LASTCONC{stage} '_dfnd.* ' QC(i).subseeddir ]);
+%     
+%     %   if switches.doregression
+%     switch switches.regressiontype
+%         %             case 0
+%         %                 [pth tmpseedimg]=fileparts(QC(i).GLMmaskfile);
+%         %                 system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%         %                 system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%         %                 [pth tmpseedimg]=fileparts(QC(i).WMmaskfile);
+%         %                 system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%         %                 system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%         %                 [pth tmpseedimg]=fileparts(QC(i).CSFmaskfile);
+%         %                 system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%         %                 system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%         %                 write_4dfpimg(QC(i).seedhold,[ QC(i).subseeddir '/usedseeds.4dfp.img'],'bigendian');
+%         %                 write_4dfpifh_222([ QC(i).subseeddir '/usedseeds.4dfp.img'],size(QC(i).seedhold,2),'bigendian',128,128,75,2,2,2);
+%         %
+%         case {0,1,9}
+%             [pth tmpseedimg]=fileparts(QC(i).GLMmaskfile);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%             [pth tmpseedimg]=fileparts(QC(i).WMmaskfile);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%             [pth tmpseedimg]=fileparts(QC(i).CSFmaskfile);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%             [pth tmpseedimg]=fileparts(QC(i).GREYmaskfile);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%             [pth tmpseedimg]=fileparts(QC(i).WBmaskfile);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.img ' QC(i).subseeddir '/' tmpseedimg '.img' ]);
+%             system([ 'ln -s ' pth '/' tmpseedimg '.ifh ' QC(i).subseeddir '/' tmpseedimg '.ifh' ]);
+%             write_4dfpimg(QC(i).seedhold,[ QC(i).subseeddir '/usedseeds.4dfp.img'],'bigendian');
+%             write_4dfpifh([ QC(i).subseeddir '/usedseeds.4dfp.img'],size(QC(i).seedhold,2),'bigendian',128,128,75,2,2,2);
+%             
+%         case 2
+%             
+%     end
+% end
+% %end
 
 
 %% CALCULATE SUBJECT MOVEMENT
 for i=1:numdatas
     for j=1:size(QC(i).restruns,1)
         
-        cd(QC(i).subbolddir{j});
-        fprintf('CALCULATING MOTION\t%d\t%s\trun%s\n',i,QC(i).vcnum,cell2mat(QC(i).restruns(j,:)));
+        %cd(QC(i).subbolddir{j});
+        fprintf('LOADING MOTION\t%d\tsub-%s\tsess-%02d\trun-%02d\n',i,QC(i).subjectID,QC(i).session,QC(i).runs(j));
         
         % obtain realignment parameters
-        system([ 'mat2dat -R -D -L ' tboldmat{i,j} ' >/dev/null' ]);
-        pause(5);
+        %system([ 'mat2dat -R -D -L ' tboldmat{i,j} ' >/dev/null' ]);
+        %pause(5);
         
         %rdatfile{i,j}= cell2mat(strcat(df.filepath{i,1},'/',QC(i).vcnum,'/movement/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d.rdat'));
         %ddatfile{i,j}= cell2mat(strcat(df.filepath{i,1},'/',QC(i).vcnum,'/movement/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_faln_dbnd_xr3d.ddat'));
-        rdatfile{i,j}= [tboldmat{i,j}(1:end-3),'rdat'];
-        ddatfile{i,j}= [tboldmat{i,j}(1:end-3),'ddat'];
+        %rdatfile{i,j}= [tboldmat{i,j}(1:end-3),'rdat'];
+        %ddatfile{i,j}= [tboldmat{i,j}(1:end-3),'ddat'];
         
+        % load motion and alignment estimates from FD folder
+        mvm{i,j} = readtable([tboldmot_folder{i,j} QC(i).naming_str{j} '_desc-mvm.txt']);        
+        mvm_filt{i,j} = readtable([tboldmot_folder{i,j} QC(i).naming_str{j} '_desc-mvm_filt.txt']);
+        FD{i,j} = readtable([tboldmot_folder{i,j} QC(i).naming_str{j} '_desc-FD.txt']);        
+        fFD{i,j} = readtable([tboldmot_folder{i,j} QC(i).naming_str{j} '_desc-fFD.txt']);        
+        
+        % CG - shouldn't need the pieces below
         % convert realignment parameters to FD, write them
-        [rmstotal{i,j} rmstrans rmsrot rmscol mvm{i,j}] = rdat_calculations_yfiltered(rdatfile{i,j},QC(i).TR,QC(i).TRskip,50);
-        [drmstotal{i,j} drmstrans drmsrot drmscol ddt_mvm{i,j}] = rdat_calculations_yfiltered(ddatfile{i,j},QC(i).TR,QC(i).TRskip,50);
-        FD{i,j}=(sum(abs(ddt_mvm{i,j}),2));
-        dlmwrite('FDvals.txt',FD{i,j},'\t');
+        %[rmstotal{i,j} rmstrans rmsrot rmscol mvm{i,j}] = rdat_calculations_yfiltered(rdatfile{i,j},QC(i).TR,QC(i).TRskip,50);
+        %[drmstotal{i,j} drmstrans drmsrot drmscol ddt_mvm{i,j}] = rdat_calculations_yfiltered(ddatfile{i,j},QC(i).TR,QC(i).TRskip,50);
+        %FD{i,j}=(sum(abs(ddt_mvm{i,j}),2));
+        %dlmwrite('FDvals.txt',FD{i,j},'\t');
         
         % write the movement parameters
-        dlmwrite('movement.txt',mvm{i,j},'\t');
-        dlmwrite('ddt_movement.txt',ddt_mvm{i,j},'\t');
+        %dlmwrite('movement.txt',mvm{i,j},'\t');
+        %dlmwrite('ddt_movement.txt',ddt_mvm{i,j},'\t');
         
         % detrend the movement
-        system(['cat movement.txt | gawk -f ' releasedir '/trendout.awk >! movement_detrended.txt']);
-        system(['cat ddt_movement.txt | gawk -f ' releasedir '/trendout.awk >! ddt_movement_detrended.txt']);
+        %system(['cat movement.txt | gawk -f ' releasedir '/trendout.awk >! movement_detrended.txt']);
+        %system(['cat ddt_movement.txt | gawk -f ' releasedir '/trendout.awk >! ddt_movement_detrended.txt']);
         
         % load in the detrended regressors
-        mvm_detrend{i,j}=load('movement_detrended.txt');
-        ddt_mvm_detrend{i,j}=load('ddt_movement_detrended.txt');
+        %mvm_detrend{i,j}=load('movement_detrended.txt');
+        %ddt_mvm_detrend{i,j}=load('ddt_movement_detrended.txt');
+        
+        % get diffed and detrended mvm params for nuisance regression
+        d = size(mvm);
+        ddt_mvm{i,j} = [zeros(1,d(2)) diff(mvm{i,j})]; % put 0 at the start by default
+        error('check this is diffing in correct direction');
+        mvm_detrend{i,j} = demean_detrend(mvm{i,j}); % will this work?
+        ddt_mvm_detrend{i,j} = demean_detrend(ddt_mvm{i,j});
+        
+        ddt_mvm_filt{i,j} = [zeros(1,d(2)) diff(mvm_filt{i,j})]; % put 0 at the start by default
+        error('check this is diffing in correct direction');
+        mvm_filt_detrend{i,j} = demean_detrend(mvm_filt{i,j}); % will this work?
+        ddt_mvm_filt_detrend{i,j} = demean_detrend(ddt_mvm_filt{i,j});
+        
+        
     end
     
     % WRITE TOTAL DATA FOR EACH SUBJECT
     
-    cd(QC(i).subdir);
+    %cd(QC(i).subdir);
     
     % write the total movement data
     QC(i).MVM=[];
@@ -749,22 +757,36 @@ for i=1:numdatas
     QC(i).DTMVM=[];
     QC(i).ddtDTMVM=[];
     QC(i).FD=[];
-    for j=1:size(QC(i).restruns,1)
-        QC(i).MVM=[QC(i).MVM; mvm{i,j}];
-        QC(i).ddtMVM=[QC(i).ddtMVM; ddt_mvm{i,j}];
-        QC(i).DTMVM=[QC(i).DTMVM; mvm_detrend{i,j}];
-        QC(i).ddtDTMVM=[QC(i).ddtDTMVM; ddt_mvm_detrend{i,j}];
-        QC(i).FD=[QC(i).FD; FD{i,j}];
-    end
-    dlmwrite('total_movement.txt',QC(i).MVM,'\t');
-    dlmwrite('total_ddt_movement.txt',QC(i).ddtMVM,'\t');
-    dlmwrite('total_movement_detrended.txt',QC(i).DTMVM,'\t');
-    dlmwrite('total_ddt_movement_detrended.txt',QC(i).ddtDTMVM,'\t');
-    dlmwrite('total_FD.txt',QC(i).FD,'\t');
     
-    QC(i).MVMrms=array_calc_rms(QC(i).MVM);
-    QC(i).DTMVMrms=array_calc_rms(QC(i).DTMVM);
-    QC(i).FDbar=mean(QC(i).FD);
+    QC(i).MVM_filt=[];
+    QC(i).ddtMVM_filt=[];
+    QC(i).DTMVM_filt=[];
+    QC(i).ddtDTMVM_filt=[];
+    QC(i).fFD=[];
+    
+    for j=1:size(QC(i).runs,1)
+        QC(i).MVM=[QC(i).MVM; mvm{i,j}];
+        QC(i).ddtMVM=[QC(i).ddtMVM; ddt_mvm{i,j}]; 
+        QC(i).DTMVM=[QC(i).DTMVM; mvm_detrend{i,j}]; 
+        QC(i).ddtDTMVM=[QC(i).ddtDTMVM; ddt_mvm_detrend{i,j}]; 
+        QC(i).FD=[QC(i).FD; FD{i,j}];
+        
+        QC(i).MVM_filt=[QC(i).MVM_filt; mvm_filt{i,j}];
+        QC(i).ddtMVM_filt=[QC(i).ddtMVM_filt; ddt_mvm_filt{i,j}]; 
+        QC(i).DTMVM_filt=[QC(i).DTMVM_filt; mvm_detrend_filt{i,j}]; 
+        QC(i).ddtDTMVM_filt=[QC(i).ddtDTMVM_filt; ddt_mvm_detrend_filt{i,j}]; 
+        QC(i).fFD=[QC(i).fFD; fFD{i,j}];
+    end
+    % CG - commented out
+    %dlmwrite('total_movement.txt',QC(i).MVM,'\t');
+    %dlmwrite('total_ddt_movement.txt',QC(i).ddtMVM,'\t');
+    %dlmwrite('total_movement_detrended.txt',QC(i).DTMVM,'\t');
+    %dlmwrite('total_ddt_movement_detrended.txt',QC(i).ddtDTMVM,'\t');
+    %dlmwrite('total_FD.txt',QC(i).FD,'\t');
+    
+    %QC(i).MVMrms=array_calc_rms(QC(i).MVM);
+    %QC(i).DTMVMrms=array_calc_rms(QC(i).DTMVM);
+    %QC(i).FDbar=mean(QC(i).FD);
     QC(i).switches=switches;
     
 end
@@ -774,7 +796,7 @@ end
 for i=1:numdatas
     trpos=0;
     tr(i).tot=numel(QC(i).FD);
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).runs,1)
         tr(i).runtrs(j)=numel(FD{i,j});
         tr(i).start(j,1:2)=[trpos+1 trpos+tr(i).runtrs(j)];
         trpos=trpos+tr(i).runtrs(j);
@@ -782,9 +804,10 @@ for i=1:numdatas
     end
     % QC(i).runborders=[QC(i).restruns' tr(i).start];
     cd(QC(i).subdir);
-    dlmwrite('runborders.txt',QC(i).runborders,'\t');
+    %dlmwrite('runborders.txt',QC(i).runborders,'\t');
 end
 
+error('no idea what this next line does... CG');
 [sortTR sortsubs]=sort(cell2mat({tr.tot}));
 
 
@@ -795,41 +818,43 @@ end
 switch tmasktype
     case 'ones'
         for i=1:numdatas
-            for j=1:size(QC(i).restruns,1)
+            for j=1:size(QC(i).runs,1)
                 QC(i).runtmask{j}=ones(size(FD{i,j},1),1);
                 QC(i).runtmask{j}(1:QC(i).TRskip)=0;
             end
             QC(i).tmask=[];
-            for j=1:size(QC(i).restruns,1)
+            for j=1:size(QC(i).runs,1)
                 QC(i).tmask=[QC(i).tmask; QC(i).runtmask{j}];
             end
         end
     otherwise
         for i=1:numel(tm.tmaskfiles)
-            fprintf('GETTING TMASK FILE\t%d\t%s\t%s\n',i,QC(i).vcnum,tm.tmaskfiles{i,1});
-            QC(i).tmask=load(tm.tmaskfiles{i,1});
-            if ~isequal(numel(QC(i).tmask),numel(QC(i).FD))
-                error('tmask length does not match the subject data');
-            end
+            fprintf('GETTING TMASK FILE\t%d\tsub-%s\tsess-%d\n',i,QC(i).subjectID,QC(u).session);
+            %QC(i).tmask=load(tm.tmaskfiles{i,1});
+            %if ~isequal(numel(QC(i).tmask),numel(QC(i).FD))
+            %    error('tmask length does not match the subject data');
+            %end
             
-            for j=1:size(QC(i).restruns,1)
-                QC(i).runtmask{j}=QC(i).tmask(QC(i).runborders(j,2):QC(i).runborders(j,3));
+            for j=1:size(QC(i).runs,1)
+                QC(i).runtmask{j}= readtable([boldtmask{i,r}]);                
+                %QC(i).runtmask{j}=QC(i).tmask(QC(i).runborders(j,2):QC(i).runborders(j,3));
             end
         end
 end
 
-for i=1:numdatas
-    cd(QC(i).subdir);
-    dlmwrite('total_tmask.txt',QC(i).tmask,'\t');
-    tmask2format(QC(i).tmask,'total_tmask_avi.txt');
-    QC(i).tmask=~~QC(i).tmask;
-    for j=1:size(QC(i).restruns,1)
-        cd(QC(i).subbolddir{j});
-        dlmwrite('tmask.txt',QC(i).runtmask{j},'\t');
-        tmask2format(QC(i).runtmask{j},'tmask_avi.txt');
-        QC(i).runtmask{j}=~~QC(i).runtmask{j};
-    end
-end
+% CG - Do we need things below? commented out
+% for i=1:numdatas
+%     cd(QC(i).subdir);
+%     dlmwrite('total_tmask.txt',QC(i).tmask,'\t');
+%     tmask2format(QC(i).tmask,'total_tmask_avi.txt');
+%     QC(i).tmask=~~QC(i).tmask;
+%     for j=1:size(QC(i).restruns,1)
+%         cd(QC(i).subbolddir{j});
+%         dlmwrite('tmask.txt',QC(i).runtmask{j},'\t');
+%         tmask2format(QC(i).runtmask{j},'tmask_avi.txt');
+%         QC(i).runtmask{j}=~~QC(i).runtmask{j};
+%     end
+% end
 
 
 %% FUNCTIONAL CONNECTIVITY PROCESSING
@@ -838,10 +863,11 @@ skipvox=15; % downsample grey matter voxels for visuals.
 set(0, 'DefaultFigureVisible', 'off');
 for f=1:numdatas
     
+    % CG: what is this?
     % orders subjects in decreasing order to minimize memory fragmentation
-    i=sortsubs(f);
+    %i=sortsubs(f);
     
-    fprintf('FCPROCESSING SUBJECT %d %s\n',f,QC(i).vcnum);
+    fprintf('FCPROCESSING SUBJECT %d sub-%s sess-%s\n',f,QC(i).subjectID,QC(i).session);
     pause(2);
     
     %Select voxels in glmmask
@@ -850,30 +876,34 @@ for f=1:numdatas
     QC(i).GMMASK_glmmask = QC(i).GMMASK(logical(QC(i).GLMMASK));
     QC(i).WBMASK_glmmask = QC(i).WBMASK(logical(QC(i).GLMMASK));
     QC(i).GLMMASK_glmmask = QC(i).GLMMASK(logical(QC(i).GLMMASK));
-    roimasks =roimasks_orig(logical(QC(i).GLMMASK),:);
+    %roimasks =roimasks_orig(logical(QC(i).GLMMASK),:);
     
     %%%
     % THE PROCESSING BEGINS
     %%%
     
     stage=1;
-    LASTCONC{stage}= '333';
-    allends='333';
-    for j=1:size(QC(i).restruns,1)
-        LASTIMG{i,j,stage}=cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_xr3d_uwrp_atl'));
+    %LASTCONC{stage}= 'fmriprep'; %'333';
+    allends= 'fmriprep'; %'333';
+    for j=1:size(QC(i).runs,1)
+        %LASTIMG{i,j,stage}=cell2mat(strcat(QC(i).subbolddir{j},'/',QC(i).vcnum,'_b',QC(i).restruns(j,:),'_xr3d_uwrp_atl'));
+        LASTIMG{i,j,stage} = tboldnii{i,j}(1:end-7); %remove .nii.gz?
     end
     
-    cd(QC(i).subdir);
+    %cd(QC(i).subdir);
     
     % obtain the raw images
-    ending='333';
-    [bolds]=conc2bolds([LASTCONC{stage} '.conc']);
-    [tempimg]=bolds2img(bolds,tr(i).tot,tr(i).start,QC(i).GLMMASK);
+    %ending= 'fmriprep'; %'333';
+    %[bolds]=conc2bolds([LASTCONC{stage} '.conc']);
+    %[tempimg]=bolds2img(bolds,tr(i).tot,tr(i).start,QC(i).GLMMASK);
+    tempimg = bolds2mat(LASTIMG{:,:,stage},tr(i).tot,tr(i).start,QC(i).GLMMASK);
     
-    [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
+    
+    %QC = tempimgsignals(QC,i,tempimg,switches,stage); % CG - do we need this?
+    QC = nuissignals(QC,tboldconf{i});
     QC(i).process{stage}=ending;
-    QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-    dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
+    %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg); % CG -needed?
+    %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
     if bigstuff
         tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
         QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
@@ -881,7 +911,7 @@ for f=1:numdatas
         QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
     end
     makepictures(QC(i),stage,switches,[700:200:1300],[0:50:100],50);
-    saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
+    saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
     
     
     %%%%%%%%%%%%%%%%%%%%%%%%
@@ -891,14 +921,14 @@ for f=1:numdatas
     stage=stage+1;
     ending='zmdt';
     allends=[allends '_' ending];
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).runs,1)
         LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
     end
     LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
     
     % for each BOLD run
-    for j=1:size(QC(i).restruns,1)
-        fprintf('\tDEMEAN DETREND\trun%s\n',cell2mat(QC(i).restruns(j,:)));
+    for j=1:size(QC(i).runs,1)
+        fprintf('\tDEMEAN DETREND\trun%s\n',cell2mat(QC(i).runs(j,:)));
         tic;
         temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
         temprun=demean_detrend(temprun,QC(i).runtmask{j});
@@ -906,10 +936,10 @@ for f=1:numdatas
         toc;
     end
     
-    [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
+    %[QC]=tempimgsignals(QC,i,tempimg,switches,stage);
     QC(i).process{stage}=ending;
-    QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-    dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
+    %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
+    %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
     if bigstuff
         tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
         QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
@@ -917,7 +947,7 @@ for f=1:numdatas
         QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
     end
     makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
-    saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
+    saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
     
     
     %%%%%%%%%%%%%%%%%%%%%%%%
@@ -929,11 +959,12 @@ for f=1:numdatas
     stage=stage+1;
     ending='resid';
     allends=[allends '_' ending];
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).runs,1)
         LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
     end
-    LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
+    %LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
     
+    %CG - STOPPED HERE
     
     if switches.doregression
         
@@ -944,23 +975,24 @@ for f=1:numdatas
                 QC(i).mvmlabels={''};
             case 1 % R,R`                   LAB CLASSIC
                 QC(i).mvmregs=[QC(i).DTMVM QC(i).ddtDTMVM];
-                QC(i).mvmlabels={'X','Y','Z','pitch','yaw','roll`','X`','Y`','Z`','pitch`','yaw`','roll`'};
+                QC(i).mvmlabels={'trans_x','trans_y','trans_z','rot_x','rot_y','rot_z',...
+                    'trans_x_ddt','trans_y_ddt','trans_z_ddt','rot_x_ddt','rot_y_ddt','rot_z_ddt'};
             case 2 % R,R^2,R-1,R-1^2       FRISTON
                 frist1=circshift(QC(i).DTMVM,[1 0]);
                 frist1(1,:)=0;
                 QC(i).mvmregs=[QC(i).DTMVM (QC(i).DTMVM.^2) frist1 frist1.^2 ];
-                QC(i).mvmlabels={'X','Y','Z','pitch','yaw','roll`','sqrX','sqrY','sqrZ','sqrpitch','sqryaw','sqrroll`','Xt-1','Yt-1','Zt-1','pitcht-1','yawt-1','rollt-1`','sqrXt-1','sqrYt-1','sqrZt-1','sqrpitcht-1','sqryawt-1','sqrrollt-1`'};
-            case 20 % R,R`,12               CONTROL for 24 parameters
-                QC(i).mvmregs=[QC(i).DTMVM QC(i).ddtDTMVM rand(size(QC(i).DTMVM,1),12) ];
-                QC(i).mvmlabels={'X','Y','Z','pitch','yaw','roll`','X`','Y`','Z`','pitch`','yaw`','roll`','r1','r2','r3','r4','r5','r6','r7','r8','r9','r10','r11','r12'};
-            case 3
-                frist=[QC(i).DTMVM];
-                frist1=circshift(QC(i).DTMVM,[1 0]);
-                frist1(1,:)=0;
-                frist2=circshift(QC(i).DTMVM,[2 0]);
-                frist2(1:2,:)=0;
-                QC(i).mvmregs=[QC(i).DTMVM (QC(i).DTMVM.^2) frist1 frist1.^2 frist2 frist2.^2 ];
-                QC(i).mvmlabels={'X','Y','Z','pitch','yaw','roll`','sqrX','sqrY','sqrZ','sqrpitch','sqryaw','sqrroll`','Xt-1','Yt-1','Zt-1','pitcht-1','yawt-1','rollt-1`','sqrXt-1','sqrYt-1','sqrZt-1','sqrpitcht-1','sqryawt-1','sqrrollt-1`','Xt-2','Yt-2','Zt-2','pitcht-2','yawt-2','rollt-2`','sqrXt-2','sqrYt-2','sqrZt-2','sqrpitcht-2','sqryawt-2','sqrrollt-2`'};
+                QC(i).mvmlabels={'X','Y','Z','rot_x','rot_y','rot_z',...
+                    'sqrX','sqrY','sqrZ','sqrrot_x','sqrrot_y','sqrrot_z',...
+                    'Xt-1','Yt-1','Zt-1','rot_xz-1','rot_yz-1','rot_zz-1',...
+                    'sqrXt-1','sqrYt-1','sqrZt-1','sqrrot_xt-1','sqrrot_yt-1','sqrrot_zt-1'};
+%             case 3
+%                 frist=[QC(i).DTMVM];
+%                 frist1=circshift(QC(i).DTMVM,[1 0]);
+%                 frist1(1,:)=0;
+%                 frist2=circshift(QC(i).DTMVM,[2 0]);
+%                 frist2(1:2,:)=0;
+%                 QC(i).mvmregs=[QC(i).DTMVM (QC(i).DTMVM.^2) frist1 frist1.^2 frist2 frist2.^2 ];
+%                 QC(i).mvmlabels={'X','Y','Z','pitch','yaw','roll`','sqrX','sqrY','sqrZ','sqrpitch','sqryaw','sqrroll`','Xt-1','Yt-1','Zt-1','pitcht-1','yawt-1','rollt-1`','sqrXt-1','sqrYt-1','sqrZt-1','sqrpitcht-1','sqryawt-1','sqrrollt-1`','Xt-2','Yt-2','Zt-2','pitcht-2','yawt-2','rollt-2`','sqrXt-2','sqrYt-2','sqrZt-2','sqrpitcht-2','sqryawt-2','sqrrollt-2`'};
         end
         
         
@@ -971,7 +1003,8 @@ for f=1:numdatas
             case {0,1}
                 if switches.GS
                     if nnz(QC(i).GLMMASK_glmmask)
-                        sig=mean(tempimg(QC(i).GLMMASK_glmmask,:))';
+                        %sig=mean(tempimg(QC(i).GLMMASK_glmmask,:))';
+                        sig = QC(i).global_signal;
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'WB'}];
                     else
@@ -980,7 +1013,8 @@ for f=1:numdatas
                 end
                 if switches.WM
                     if nnz(QC(i).WMMASK_glmmask)
-                        sig=mean(tempimg(QC(i).WMMASK_glmmask,:))';
+                        %sig=mean(tempimg(QC(i).WMMASK_glmmask,:))';
+                        sig = QC(i).white_matter;
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'WM'}];
                     else
@@ -989,7 +1023,8 @@ for f=1:numdatas
                 end
                 if switches.V
                     if nnz(QC(i).CSFMASK_glmmask)
-                        sig=mean(tempimg(QC(i).CSFMASK_glmmask,:))';
+                        %sig=mean(tempimg(QC(i).CSFMASK_glmmask,:))';
+                        sig = QC(i).csf;
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'V'}];
                     else
@@ -1028,18 +1063,18 @@ for f=1:numdatas
         
         QC(i).nuisanceregressors_ZSCORE=regsz;
         
-        % write the beta images
-        zb_out = zeros(size(QC(i).GLMMASK,1),size(zb,2)); %Put back in volume space
-        zb_out(logical(QC(i).GLMMASK),:) = zb; %Put back in volume space
-        clear zb
-        write_4dfpimg(zb_out,'beta.4dfp.img','bigendian');
-        write_4dfpifh('beta.4dfp.img',size(zb_out,2),'bigendian');
+        % write the beta images % CG - implement later if we want it
+        %zb_out = zeros(size(QC(i).GLMMASK,1),size(zb,2)); %Put back in volume space
+        %zb_out(logical(QC(i).GLMMASK),:) = zb; %Put back in volume space
+        %clear zb
+        %write_4dfpimg(zb_out,'beta.4dfp.img','bigendian');
+        %write_4dfpifh('beta.4dfp.img',size(zb_out,2),'bigendian');
         
         
-        [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
+        %[QC]=tempimgsignals(QC,i,tempimg,switches,stage);
         QC(i).process{stage}=ending;
-        QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-        dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
+        %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
+        %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
         if bigstuff
             tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
             QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
@@ -1047,7 +1082,7 @@ for f=1:numdatas
             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
         end
         makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
-        saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
+        saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
         
     end
     
@@ -1055,115 +1090,76 @@ for f=1:numdatas
     % INTERPOLATION
     %%%%%%%%%%%%%%%%%%%%%%%%
     
-    %     if switches.dointerpolate
-    %
-    %         stage=stage+1;
-    %         ending='ntrpl';
-    %         allends=[allends '_' ending];
-    %         for j=1:size(QC(i).restruns,1)
-    %             LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
-    %         end
-    %         LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
-    %
-    %         % for each BOLD run
-    %         for j=1:size(QC(i).restruns,1)
-    %             fprintf('\tINTERPOLATE\trun%d\n',QC(i).restruns(j,:));
-    %             tic;
-    %             temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
-    %             [tchunksize tstartnums tendnums] = maskgaps(QC(i).runtmask{j});
-    %             for m=1:size(temprun,1) % for each voxel replace with interpolation
-    %                 [temprun(m,:)]=ts_interpolate(temprun(m,:),tstartnums,tendnums);
-    %             end
-    %             tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3))=temprun;
-    %             toc;
-    %         end
-    %
-    %         [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
-    %         QC(i).process{stage}=ending;
-    %         QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-    %         dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
-    %         if bigstuff
-    %             tmptcs=single(tempimg(QC(i).GMMASK,:));
-    %             QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
-    %             QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK,:));
-    %             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK,:));
-    %         end
-    %         makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
-    %         saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
-    %
-    %     end
-    
     if switches.dointerpolate
         
         stage=stage+1;
         ending='ntrpl';
         allends=[allends '_' ending];
-        for j=1:size(QC(i).restruns,1)
+        for j=1:size(QC(i).runs,1)
             LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
         end
-        LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
+        %LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
         
         
-        % CG - changing interpolation so it is done by full session rather
-        % than run (based on code below)
-        fprintf('\tINTERPOLATE full set\n');
-                  tic;
-            temprun=tempimg;
-            ofac=8;
-            hifac=1;
-            TRtimes=([1:size(temprun,2)]')*QC(i).TR;
-            TRtimes=([1:size(temprun,2)]')*QC(i).TR;
-            
-            if numel(TRtimes)<150
-                voxbinsize=5000;
-            elseif (numel(TRtimes)>=150 && numel(TRtimes)<500)
-                voxbinsize=500;
-            elseif numel(TRtimes)>=500
-                voxbinsize=50;
-            end
-            fprintf('INTERPOLATION VOXBINSIZE: %d\n',voxbinsize);
-            voxbin=1:voxbinsize:size(temprun,1);
-            voxbin=[voxbin size(temprun,1)];
+        
+        %%% CG: consider shifting this to do interpolation for all runs at
+        %%% once rather than each run separately
+        %%%%%
+        % for each BOLD run
+                for j=1:numel(QC(i).runs)
+                    fprintf('\tINTERPOLATE\trun%d\n',QC(i).runs(j));
+                    tic;
+                    temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
+                    ofac=8;
+                    hifac=1;
+                    TRtimes=([1:size(temprun,2)]')*QC(i).TR;
 
-            temprun=temprun';
-            tempanish=zeros(size(temprun,1),size(temprun,2));
-            
-            % gotta bin by voxels: 5K is ~15GB, 15K is ~40GB at standard
-            % run lengths. 5K is ~15% slower but saves 2/3 RAM, so that's
-            % the call.
-            disp(['size ' num2str(size(voxbin))])
-            matlabpool open 4
-            %for v = 1:numel(voxbin)-1 % this takes huge RAM if all voxels
-            parfor v = 1:numel(voxbin)-1 % this takes huge RAM if all voxels
-                %temp = temprun(~~QC(i).runtmask{j},voxbin(v):voxbin(v+1));
-                temp = temprun(~~QC(i).tmask,voxbin(v):voxbin(v+1));
-                %tempanish_piece{v}=getTransform(TRtimes(~~QC(i).runtmask{j}),temp,TRtimes,QC(i).TR,ofac,hifac);
-                tempanish_piece{v}=getTransform(TRtimes(~~QC(i).tmask),temp,TRtimes,QC(i).TR,ofac,hifac);
-            end
-            matlabpool close
-            
-            for v = 1:numel(voxbin)-1
-                tempanish(:,voxbin(v):voxbin(v+1)) = tempanish_piece{v};
-            end
-            clear tempanish_piece;
-            
-            tempanish=tempanish';
-            temprun=temprun';
-            
-            %temprun(:,~QC(i).runtmask{j})=tempanish(:,~QC(i).runtmask{j});
-            temprun(:,~QC(i).tmask)=tempanish(:,~QC(i).tmask);
-            %tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3))=temprun;
-            tempimg=temprun;
-            toc;
-        %%% CG added piece - END
+                    if numel(TRtimes)<150
+                        voxbinsize=5000;
+                    elseif (numel(TRtimes)>=150 && numel(TRtimes)<500)
+                        voxbinsize=500;
+                    elseif numel(TRtimes)>=500
+                        voxbinsize=50;
+                    end
+                    fprintf('INTERPOLATION VOXBINSIZE: %d\n',voxbinsize);
+                    voxbin=1:voxbinsize:size(temprun,1);
+                    voxbin=[voxbin size(temprun,1)];
+
+                    temprun=temprun';
+                    tempanish=zeros(size(temprun,1),size(temprun,2));
+
+                    % gotta bin by voxels: 5K is ~15GB, 15K is ~40GB at standard
+                    % run lengths. 5K is ~15% slower but saves 2/3 RAM, so that's
+                    % the call.
+                    % CG: could consider adding parfor loops here
+                    for v=1:numel(voxbin)-1 % this takes huge RAM if all voxels
+%                         tempanish(:,voxbin(v):voxbin(v+1))=getTransform(TRtimes(~~QC(i).runtmask{j}),temprun(~~QC(i).runtmask{j},voxbin(v):voxbin(v+1)),TRtimes,QC(i).TR,ofac,hifac);
+%
+%
+%<BAS> Added code from Gaurav Patel's coding wiz: speeds up interpolation
+%      25x. Answer is the same as the original (getTransform) within
+%      rounding error.
+                        tempanish(:,voxbin(v):voxbin(v+1))=LSTransform(TRtimes(~~QC(i).runtmask{j}),temprun(~~QC(i).runtmask{j},voxbin(v):voxbin(v+1)),TRtimes,QC(i).TR,ofac,hifac);
+%</BAS>
+                    end
+
+                    tempanish=tempanish';
+                    temprun=temprun';
+
+                    temprun(:,~QC(i).runtmask{j})=tempanish(:,~QC(i).runtmask{j});
+                    tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3))=temprun;
+                    toc;
+                end
         
-        % for each BOLD run % CG commented out
-%         for j=1:size(QC(i).restruns,1)
-%             fprintf('\tINTERPOLATE\trun%s\n',cell2mat(QC(i).restruns(j,:)));
-%             tic;
-%             temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
+        
+        
+%         %%%%% PREVIOUS VERSION, CG implemented edits to do all runs at once
+%                 fprintf('\tINTERPOLATE full set\n');
+%                   tic;
+%             temprun=tempimg;
 %             ofac=8;
 %             hifac=1;
+%             TRtimes=([1:size(temprun,2)]')*QC(i).TR;
 %             TRtimes=([1:size(temprun,2)]')*QC(i).TR;
 %             
 %             if numel(TRtimes)<150
@@ -1176,7 +1172,7 @@ for f=1:numdatas
 %             fprintf('INTERPOLATION VOXBINSIZE: %d\n',voxbinsize);
 %             voxbin=1:voxbinsize:size(temprun,1);
 %             voxbin=[voxbin size(temprun,1)];
-%             
+% 
 %             temprun=temprun';
 %             tempanish=zeros(size(temprun,1),size(temprun,2));
 %             
@@ -1184,14 +1180,15 @@ for f=1:numdatas
 %             % run lengths. 5K is ~15% slower but saves 2/3 RAM, so that's
 %             % the call.
 %             disp(['size ' num2str(size(voxbin))])
-%             %matlabpool open 4
-%             %parfor v=1:numel(voxbin)-1 % this takes huge RAM if all voxels
-%             for v = 1:numel(voxbin) - 1
-%                 %disp(['binnum ' num2str(v)])
-%                 temp = temprun(~~QC(i).runtmask{j},voxbin(v):voxbin(v+1));
-%                 tempanish_piece{v}=getTransform(TRtimes(~~QC(i).runtmask{j}),temp,TRtimes,QC(i).TR,ofac,hifac);
-%                 
-%                 % tempanish(:,voxbin(v):voxbin(v+1))=getTransform(TRtimes(~~QC(i).runtmask{j}),temp),TRtimes,QC(i).TR,ofac,hifac);
+%             matlabpool open 4
+%             %for v = 1:numel(voxbin)-1 % this takes huge RAM if all voxels
+%             parfor v = 1:numel(voxbin)-1 % this takes huge RAM if all voxels
+%                 %temp = temprun(~~QC(i).runtmask{j},voxbin(v):voxbin(v+1));
+%                 temp = temprun(~~QC(i).tmask,voxbin(v):voxbin(v+1));
+%                 %tempanish_piece{v}=getTransform(TRtimes(~~QC(i).runtmask{j}),temp,TRtimes,QC(i).TR,ofac,hifac);
+%                 tempanish_piece{v}=getTransform(TRtimes(~~QC(i).tmask),temp,TRtimes,QC(i).TR,ofac,hifac);
+%                 tempanish(:,voxbin(v):voxbin(v+1))=LSTransform(TRtimes(~~QC(i).runtmask{j}),temprun(~~QC(i).runtmask{j},voxbin(v):voxbin(v+1)),TRtimes,QC(i).TR,ofac,hifac);
+% 
 %             end
 %             matlabpool close
 %             
@@ -1199,24 +1196,23 @@ for f=1:numdatas
 %                 tempanish(:,voxbin(v):voxbin(v+1)) = tempanish_piece{v};
 %             end
 %             clear tempanish_piece;
-%             %        matlabpool open 4
-%             %        parfor v=1:size(temprun,2) % this takes huge RAM if all voxels
-%             %            tempanish(:,v)=getTransform(TRtimes(~~QC(i).runtmask{j}),temprun(~~QC(i).runtmask{j},v),TRtimes,QC(i).TR,ofac,hifac);
-%             %        end
-%             %        matlabpool close
 %             
 %             tempanish=tempanish';
 %             temprun=temprun';
 %             
-%             temprun(:,~QC(i).runtmask{j})=tempanish(:,~QC(i).runtmask{j});
-%             tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3))=temprun;
+%             %temprun(:,~QC(i).runtmask{j})=tempanish(:,~QC(i).runtmask{j});
+%             temprun(:,~QC(i).tmask)=tempanish(:,~QC(i).tmask);
+%             %tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3))=temprun;
+%             tempimg=temprun;
 %             toc;
-%         end
+%         %%% CG added piece - END
         
-        [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
+
+        
+        %[QC]=tempimgsignals(QC,i,tempimg,switches,stage);
         QC(i).process{stage}=ending;
-        QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-        dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
+        %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
+        %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
         if bigstuff
             tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
             QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
@@ -1224,7 +1220,7 @@ for f=1:numdatas
             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
         end
         makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
-        saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
+        saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
         
     end
     
@@ -1237,10 +1233,10 @@ for f=1:numdatas
         stage=stage+1;
         ending='bpss';
         allends=[allends '_' ending];
-        for j=1:size(QC(i).restruns,1)
+        for j=1:size(QC(i).runs,1)
             LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
         end
-        LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
+        %LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
         
         filtorder=switches.order;
         switch switches.temporalfiltertype
@@ -1271,10 +1267,10 @@ for f=1:numdatas
             toc;
         end
         
-        [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
+        %[QC]=tempimgsignals(QC,i,tempimg,switches,stage);
         QC(i).process{stage}=ending;
-        QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-        dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
+        %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
+        %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
         if bigstuff
             tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
             QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
@@ -1282,7 +1278,7 @@ for f=1:numdatas
             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
         end
         makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
-        saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
+        saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
         
         % create temporal mask based on filter properties
         filtertrim=15; % TRs at beginning and end of run to ignore due to IIR zero-phase filter
@@ -1305,13 +1301,13 @@ for f=1:numdatas
     stage=stage+1;
     ending='zmdt';
     allends=[allends '_' ending];
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).runs,1)
         LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
     end
-    LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
+    %LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
     
     % for each BOLD run
-    for j=1:size(QC(i).restruns,1)
+    for j=1:size(QC(i).runs,1)
         fprintf('\tDEMEAN DETREND\trun%s\n',cell2mat(QC(i).restruns(j,:)));
         tic;
         temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
@@ -1324,10 +1320,10 @@ for f=1:numdatas
         toc;
     end
     
-    [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
+    %[QC]=tempimgsignals(QC,i,tempimg,switches,stage);
     QC(i).process{stage}=ending;
-    QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-    dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
+    %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
+    %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
     if bigstuff
         tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
         QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
@@ -1335,62 +1331,64 @@ for f=1:numdatas
         QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
     end
     makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
-    saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
+    saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
     
     
     %%%%%%%%%%%%%%%%%%%%%%%%
     %%% SPATIAL BLUR %%%
     %%%%%%%%%%%%%%%%%%%%%%%%
     
-    if switches.doblur
-        stage=stage+1;
-        ending=[ 'g' num2str(round(blursize*10)) ];
-        allends=[allends '_' ending];
-        LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
-        for j=1:size(QC(i).restruns,1)
-            LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
-        end
-        
-        tic
-        fprintf('\tSPATIAL BLUR\n');
-        
-        % write BOLD files from previous stage b/c use 4dfp tool
-        for j=1:size(QC(i).restruns,1)
-            temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
-            temprun_out = zeros(size(QC(i).GLMMASK,1),size(temprun,2)); %Put back in volume space
-            temprun_out(logical(QC(i).GLMMASK),:) = temprun; %Put back in volume space
-            clear temprun
-            write_4dfpimg(temprun_out,[ LASTIMG{i,j,stage-1} '.4dfp.img'],'bigendian');
-            write_4dfpifh([ LASTIMG{i,j,stage-1} '.4dfp.img'],size(temprun_out,2),'bigendian');
-        end
-        % write a new concfile
-        fid=fopen([LASTCONC{stage-1} '.conc'],'w');
-        fprintf(fid,'number_of_files: %s\n',size(QC(i).restruns,1));
-        for j=1:size(QC(i).restruns,1)
-            fprintf(fid,'\tfile:%s\n',[LASTIMG{i,j,stage-1} '.4dfp.img' ]);
-        end
-        fclose(fid);
-        
-        % run the spatial blur
-        system(['gauss_4dfp ' LASTCONC{stage-1} '.conc ' num2str(blursize) ' >/dev/null']);
-        pause(5);
-        [bolds]=conc2bolds([LASTCONC{stage} '.conc']);
-        [tempimg]=bolds2img(bolds,tr(i).tot,tr(i).start);
-        toc
-        
-        [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
-        QC(i).process{stage}=ending;
-        QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
-        dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
-        if bigstuff
-            tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
-            QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
-            QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
-            QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
-        end
-        makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
-        saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
-    end
+    % CG - commented this out for now.
+    % EITHER do blurring through another tool (AFNI?) or on the surface
+%     if switches.doblur
+%         stage=stage+1;
+%         ending=[ 'g' num2str(round(blursize*10)) ];
+%         allends=[allends '_' ending];
+%         %LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
+%         for j=1:size(QC(i).restruns,1)
+%             LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
+%         end
+%         
+%         tic
+%         fprintf('\tSPATIAL BLUR\n');
+%         
+%         % write BOLD files from previous stage b/c use 4dfp tool
+%         for j=1:size(QC(i).restruns,1)
+%             temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
+%             temprun_out = zeros(size(QC(i).GLMMASK,1),size(temprun,2)); %Put back in volume space
+%             temprun_out(logical(QC(i).GLMMASK),:) = temprun; %Put back in volume space
+%             clear temprun
+%             write_4dfpimg(temprun_out,[ LASTIMG{i,j,stage-1} '.4dfp.img'],'bigendian');
+%             write_4dfpifh([ LASTIMG{i,j,stage-1} '.4dfp.img'],size(temprun_out,2),'bigendian');
+%         end
+%         % write a new concfile
+%         fid=fopen([LASTCONC{stage-1} '.conc'],'w');
+%         fprintf(fid,'number_of_files: %s\n',size(QC(i).restruns,1));
+%         for j=1:size(QC(i).restruns,1)
+%             fprintf(fid,'\tfile:%s\n',[LASTIMG{i,j,stage-1} '.4dfp.img' ]);
+%         end
+%         fclose(fid);
+%         
+%         % run the spatial blur
+%         system(['gauss_4dfp ' LASTCONC{stage-1} '.conc ' num2str(blursize) ' >/dev/null']);
+%         pause(5);
+%         [bolds]=conc2bolds([LASTCONC{stage} '.conc']);
+%         [tempimg]=bolds2img(bolds,tr(i).tot,tr(i).start);
+%         toc
+%         
+%         [QC]=tempimgsignals(QC,i,tempimg,switches,stage);
+%         QC(i).process{stage}=ending;
+%         QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg);
+%         dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
+%         if bigstuff
+%             tmptcs=single(tempimg(QC(i).GMMASK_glmmask,:));
+%             QC(i).GMtcs(:,:,stage)=tmptcs(1:skipvox:end,:);
+%             QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
+%             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
+%         end
+%         makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
+%         saveas(gcf,[ num2str(i) '_' QC(i).vcnum '_' num2str(stage) '_' allends '.tiff'],'tiff');
+%     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%% CONCATENATE INTO SINGLE IMAGE %%%
@@ -1398,91 +1396,113 @@ for f=1:numdatas
     
     
     fprintf('\tCONCATENATE AND CLEANUP\n');
-    cd(QC(i).subdir);
+    %cd(QC(i).subdir);
     tempimg_out = zeros(size(QC(i).GLMMASK,1),size(tempimg,2)); %Put back in volume space
     tempimg_out(logical(QC(i).GLMMASK),:) = tempimg; %Put back in volume space
     clear tempimg
-    write_4dfpimg(tempimg_out,[ QC(i).vcnum '_' allends '.4dfp.img'],'bigendian');
-    write_4dfpifh([ QC(i).vcnum '_' allends '.4dfp.img'],size(tempimg_out,2),'bigendian');
+    
+    %write_4dfpimg(tempimg_out,[ QC(i).vcnum '_' allends '.4dfp.img'],'bigendian');
+    %write_4dfpifh([ QC(i).vcnum '_' allends '.4dfp.img'],size(tempimg_out,2),'bigendian');
+    % save a separate file for each run so not too huge
+    for j = 1:length(QC(i).runs)
+        origdat = load_nii(tboldnii{i,j});
+        hdr = origdat.hdr; % save header info for saving out data 
+        warning('check if anything else needs to be changed in header?');
+        clear origdat;
+
+        outdat.img = tempimg_out(:,:,:,tr(i).start(j,1):tr(i).start(j,2));
+        outdat.hdr = hdr;
+        out_fname = [QC(i).sessdir_out QC(i).naming_str{j} '_' allends '.nii.gz'];
+        save_nii(outdat,out_fname);
+        clear outdat;
+    end
+    
+    % save QC file per session
+    QC_outname = [QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) '_QC.mat'];
+    QCsub = QC(i);
+    save(QC_outname,'QCsub');
+    clear QCsub;
+    
+    
     
     % create a final DV file
-    system(['cp total_DV_' LASTCONC{stage} '.txt total_DV_final.txt']);
+    %system(['cp total_DV_' LASTCONC{stage} '.txt total_DV_final.txt']);
     
     
     % write summary log file
-    cd(QC(i).subdir);
-    fid=fopen('processing_log.txt','w');
-    fprintf(fid,'Subject: %s\n',QC(i).vcnum);
-    fprintf(fid,'Sourcedir: %s\n',df.filepath{i});
-    fprintf(fid,'Sourceprm: %s\n',df.prmfile{i});
-    fprintf(fid,'set boldruns = (');
-    for j=1:size(QC(i).restruns,1)
-        fprintf(fid,'%d',cell2mat(QC(i).restruns(j,:)));
-        if j~=size(QC(i).restruns,1)
-            fprintf(fid,' ');
-        end
-    end
-    fprintf(fid,')\n');
-    fprintf(fid,'tmasktype: %s\n',tmasktype);
-    if ~isequal(tmasktype,'ones')
-        fprintf(fid,'%s',tm.tmaskfiles{i,1});
-    end
-    fprintf(fid,'switches.doregression (1=yes;0=no): %d\n',switches.doregression);
-    fprintf(fid,'switches.regressiontype (0=classic;1=freesurfer;2=user4dfp;3:usertxt): %d\n',switches.regressiontype);
-    fprintf(fid,'switches.motionestimates (0=no; 1=R,R`; 2=FRISTON; 20=R,R`,12rand): %d\n',switches.motionestimates);
-    fprintf(fid,'switches.WM (1=regress;0=no): %d\n',switches.WM);
-    fprintf(fid,'switches.V (1=regress;0=no): %d\n',switches.V);
-    fprintf(fid,'switches.GS (1=regress;0=no): %d\n',switches.GS);
-    fprintf(fid,'switches.dointerpolate (1=yes;0=no): %d\n',switches.dointerpolate);
-    fprintf(fid,'switches.dobandpass (1=yes;0=no): %d\n',switches.dobandpass);
-    fprintf(fid,'switches.temporalfiltertype (1=lowpass;2=hipass;3=bandpass): %d\n',switches.temporalfiltertype);
-    fprintf(fid,'switches.lopasscutoff (in Hz; 0.08 is typical): %g\n',switches.lopasscutoff);
-    fprintf(fid,'switches.hipasscutoff (in Hz; 0.009 is typical): %g\n',switches.hipasscutoff);
-    fprintf(fid,'switches.order (1 is typical): %g\n',switches.order);
-    fprintf(fid,'switches.doblur (1=yes;0=no): %d\n',switches.doblur);
-    fprintf(fid,'switches.blurkernel (in mm; 6 is typical): %d\n',switches.blurkernel);
-    fprintf(fid,'PROCESSING STEPS\n');
-    for j=1:numel(LASTCONC)
-        fprintf(fid,'%s\n',LASTCONC{j});
-    end
-    fclose(fid);
+%     cd(QC(i).subdir);
+%     fid=fopen('processing_log.txt','w');
+%     fprintf(fid,'Subject: %s\n',QC(i).subjectID);
+%     fprintf(fid,'Sourcedir: %s\n',df.filepath{i});
+%     fprintf(fid,'Sourceprm: %s\n',df.prmfile{i});
+%     fprintf(fid,'set boldruns = (');
+%     for j=1:size(QC(i).restruns,1)
+%         fprintf(fid,'%d',cell2mat(QC(i).restruns(j,:)));
+%         if j~=size(QC(i).restruns,1)
+%             fprintf(fid,' ');
+%         end
+%     end
+%     fprintf(fid,')\n');
+%     fprintf(fid,'tmasktype: %s\n',tmasktype);
+%     if ~isequal(tmasktype,'ones')
+%         fprintf(fid,'%s',tm.tmaskfiles{i,1});
+%     end
+%     fprintf(fid,'switches.doregression (1=yes;0=no): %d\n',switches.doregression);
+%     fprintf(fid,'switches.regressiontype (0=classic;1=freesurfer;2=user4dfp;3:usertxt): %d\n',switches.regressiontype);
+%     fprintf(fid,'switches.motionestimates (0=no; 1=R,R`; 2=FRISTON; 20=R,R`,12rand): %d\n',switches.motionestimates);
+%     fprintf(fid,'switches.WM (1=regress;0=no): %d\n',switches.WM);
+%     fprintf(fid,'switches.V (1=regress;0=no): %d\n',switches.V);
+%     fprintf(fid,'switches.GS (1=regress;0=no): %d\n',switches.GS);
+%     fprintf(fid,'switches.dointerpolate (1=yes;0=no): %d\n',switches.dointerpolate);
+%     fprintf(fid,'switches.dobandpass (1=yes;0=no): %d\n',switches.dobandpass);
+%     fprintf(fid,'switches.temporalfiltertype (1=lowpass;2=hipass;3=bandpass): %d\n',switches.temporalfiltertype);
+%     fprintf(fid,'switches.lopasscutoff (in Hz; 0.08 is typical): %g\n',switches.lopasscutoff);
+%     fprintf(fid,'switches.hipasscutoff (in Hz; 0.009 is typical): %g\n',switches.hipasscutoff);
+%     fprintf(fid,'switches.order (1 is typical): %g\n',switches.order);
+%     fprintf(fid,'switches.doblur (1=yes;0=no): %d\n',switches.doblur);
+%     fprintf(fid,'switches.blurkernel (in mm; 6 is typical): %d\n',switches.blurkernel);
+%     fprintf(fid,'PROCESSING STEPS\n');
+%     for j=1:numel(LASTCONC)
+%         fprintf(fid,'%s\n',LASTCONC{j});
+%     end
+%     fclose(fid);
     
     % write a tiff of the QC figures for this subject
-    close;
-    QC(i).numTRs=numel(QC(i).FD);
-    subplot(3,1,1);
-    plot(QC(i).FD,'r');
-    xlim([0 QC(i).numTRs]);
-    ylim([0 1]); ylabel('FD');
-    subplot(3,1,2); [figaxis]=plotyy(1:QC(i).numTRs,QC(i).DV_GLM(:,1),1:QC(i).numTRs,QC(i).DV_GLM(:,end));
-    set(figaxis(1),'ylim',[0 50],'ytick',[0 50],'xlim',[0 QC(i).numTRs]);
-    set(figaxis(2),'ylim',[0 5],'ytick',[0 5],'xlim',[0 QC(i).numTRs]);
-    ylabel('DV');
-    r1=corrcoef([QC(i).FD(QC(i).tmask) QC(i).DV_GLM(QC(i).tmask,1)]);
-    r1=r1(2,1);
-    r2=corrcoef([QC(i).FD(QC(i).tmask) QC(i).DV_GLM(QC(i).tmask,end)]);
-    r2=r2(2,1);
-    legend({['333 r=' num2str(r1,2) ],['final r=' num2str(r2,2)]});
-    hold on;
-    subplot(3,1,3); imagesc(QC(i).tmask');
-    saveas(gcf,'total_QC.tiff','tiff');
-    close;
+%     close;
+%     QC(i).numTRs=numel(QC(i).FD);
+%     subplot(3,1,1);
+%     plot(QC(i).FD,'r');
+%     xlim([0 QC(i).numTRs]);
+%     ylim([0 1]); ylabel('FD');
+%     subplot(3,1,2); [figaxis]=plotyy(1:QC(i).numTRs,QC(i).DV_GLM(:,1),1:QC(i).numTRs,QC(i).DV_GLM(:,end));
+%     set(figaxis(1),'ylim',[0 50],'ytick',[0 50],'xlim',[0 QC(i).numTRs]);
+%     set(figaxis(2),'ylim',[0 5],'ytick',[0 5],'xlim',[0 QC(i).numTRs]);
+%     ylabel('DV');
+%     r1=corrcoef([QC(i).FD(QC(i).tmask) QC(i).DV_GLM(QC(i).tmask,1)]);
+%     r1=r1(2,1);
+%     r2=corrcoef([QC(i).FD(QC(i).tmask) QC(i).DV_GLM(QC(i).tmask,end)]);
+%     r2=r2(2,1);
+%     legend({['333 r=' num2str(r1,2) ],['final r=' num2str(r2,2)]});
+%     hold on;
+%     subplot(3,1,3); imagesc(QC(i).tmask');
+%     saveas(gcf,'total_QC.tiff','tiff');
+%     close;
     
 end
 
 
 %% RETURN TO THE STARTING DIRECTORY AND SAVE LABELS
-cd(outputDir);
-% write a corrfile
-fid=fopen('corrfile.txt','w');
-for i=1:numdatas
-    fprintf(fid,'%s\t%s\t%s\n',[QC(i).subdir '/' QC(i).vcnum '_' allends '.4dfp.img'],[QC(i).subdir '/total_tmask.txt'],QC(i).vcnum);
-end
-fclose(fid);
-save('QC.mat','QC','-v7.3');
-cd(startdir);
-
-toc
+% cd(outputDir);
+% % write a corrfile
+% fid=fopen('corrfile.txt','w');
+% for i=1:numdatas
+%     fprintf(fid,'%s\t%s\t%s\n',[QC(i).subdir '/' QC(i).vcnum '_' allends '.4dfp.img'],[QC(i).subdir '/total_tmask.txt'],QC(i).vcnum);
+% end
+% fclose(fid);
+% save('QC.mat','QC','-v7.3');
+% cd(startdir);
+% 
+% toc
 %exit;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1510,6 +1530,19 @@ for j=1:size(bolds,1)
     temp = read_4dfpimg_HCP(bolds{j,1});
     %    fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
     fcimg(:,trborders(j,1):trborders(j,2))=temp(logical(GLMmask),:);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [fcimg]=bolds2mat(bolds,trtot,trborders,GLMmask)
+
+vox = nnz(GLMmask);
+%vox=902629;%147456;
+fcimg=zeros(vox,trtot);
+for j=1:size(bolds,1)
+    temp = load_nii(bolds{i,j});
+    %temp = read_4dfpimg_HCP(bolds{j,1});
+    %    fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
+    fcimg(:,trborders(j,1):trborders(j,2))=temp.img(logical(GLMmask),:);
 end
 
 
@@ -1646,7 +1679,9 @@ totrms=sqrt(sum(rms.^2));
 function [tempbold tempbetas] = demean_detrend(img,varargin)
 
 if ~isnumeric(img)
-    [tempbold]=read_4dfpimg_HCP(img); % read image
+    %[tempbold]=read_4dfpimg_HCP(img); % read image
+    tempbold = load_nii(img);
+    tempbold = tempbold.img;
 else
     [tempbold]=img;
     clear img;
@@ -1670,6 +1705,7 @@ tempbold=tempbold-tempintvals;
 
 if nargin==3
     outname=varargin{1,2};
+    error('not changed to nii yet'); % CG added
     write_4dfpimg(tempbold,outname,'bigendian');
     write_4dfpifh(outname,size(tempbold,2),'bigendian');
 end
@@ -1723,7 +1759,7 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [QC] = tempimgsignals(QC,i,tempimg,switches,stage)
+function QC = tempimgsignals(QC,i,tempimg,switches,stage)
 
 difftempimg=diff(tempimg')';
 difftempimg=[zeros(size(difftempimg,1),1) difftempimg];
@@ -1775,6 +1811,29 @@ if switches.regressiontype==1 | switches.regressiontype==9
     QC(i).DVbar_WB(stage)=nanmean(QC(i).DV_WB(:,stage));
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function QC = nuissignals(QC,i,tboldconf)
+% CG - added in to draw confound signals from fmriprep output
+
+% relevant confounds to carry forward:
+conf_names = {'csf','csf_derivarive1','csf_power2','csf_derivative1_power2',...
+    'white_matter','white_matter_derivarive1','white_matter_power2','white_matter_derivative1_power2',...
+    'global_signal','global_signal_derivarive1','global_signal_power2','global_signal_derivative1_power2',...
+    'std_dvars','dvars'};
+
+%prep structure with empty arrays
+for cn = 1:length(conf_names)
+    QC(i).(conf_names{cn}) = [];
+end
+
+% load confounds signals from fmriprep
+for j = 1:length(tboldconf)
+    run_confounds = bids.util.tsvread(tboldconf{j});
+    for cn = 1:length(conf_names)
+        QC(i).(conf_names{cn}) = [QC(i).(conf_names{cn}) run_confounds.(conf_names{cn})];
+    end
+end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function makepictures(QC,stage,switches,rightsignallim,leftsignallim,FDmult)
@@ -1786,9 +1845,10 @@ numpts=numel(QC.FD);
 clf;
 subplot(8,1,1:2);
 pointindex=1:numpts;
-[h a(1) a(2)]=plotyy(pointindex,QC.DV_GLM(:,stage),pointindex,QC.MEAN_GLM(:,stage));
+%[h a(1) a(2)]=plotyy(pointindex,QC.DV_GLM(:,stage),pointindex,QC.MEAN_GLM(:,stage));
+[h a(1) a(2)]=plotyy(pointindex,QC.dvars,pointindex,QC.global_signal);
 set(h(1),'xlim',[0 numpts],'ylim',lylimz,'ycolor',[0 0 0],'ytick',leftsignallim);
-ylabel('B:DV G:GLM');
+ylabel('B:DV G:GS');
 set(a(1),'color',[0 0 1]);
 set(h(2),'xlim',[0 numpts],'ycolor',[0 0 0],'xlim',[0 numel(QC.DV_GLM(:,stage))],'ylim',rylimz,'ytick',rightsignallim);
 set(a(2),'color',[0 .5 0]);
@@ -1810,6 +1870,8 @@ if switches.regressiontype==1 | switches.regressiontype==9
     subplot(8,1,8);
     imagesc([QC.WMtcs(:,:,stage);QC.CSFtcs(:,:,stage)],rylimz); ylabel('WM CSF');
 end
+
+warning('fix this grayplot to look like CG wants');
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2109,3 +2171,12 @@ function switches = get_input_from_user()
                 needcorrectinput=0;
         end
     end
+    
+function dfndvoxels = create_union_mask(boldmasknii)
+   
+display('still need to set this up');
+for r = 1:size(boldmasknii)
+    tmp = load_nii(boldmasknii{r});
+    error('stop here');
+end
+    
