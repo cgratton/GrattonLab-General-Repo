@@ -6,7 +6,7 @@
 #SBATCH -n 1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem-per-cpu=4G
-#SBATCH -J fmriprep_MOD5
+#SBATCH -J fmriprep_20.0.1
 # Outputs ----------------------------------
 #SBATCH --mail-user=cgratton@northwestern.edu
 #SBATCH --mail-type=ALL
@@ -17,8 +17,8 @@ subject="INET003"
 
 # set up some directory information (make this an input?)
 BIDS_DIR="/projects/b1081/iNetworks/Nifti"
-DERIVS_DIR="derivatives/preproc_fmriprep-1.5.8_MOD5"
-WORK_DIR="/projects/b1081/singularity_images/work_MOD5"
+DERIVS_DIR="derivatives/preproc_fmriprep-20.0.1"
+WORK_DIR="/projects/b1081/singularity_images/work_20.0.1"
 
 # Prepare derivatives folder and work dirs
 mkdir -p ${BIDS_DIR}/${DERIVS_DIR}
@@ -48,5 +48,6 @@ singularity run --cleanenv -B /projects/b1081:/projects/b1081 \
     participant --participant-label ${subject} \
     -w ${WORK_DIR} --omp-nthreads 8 --nthreads 12 --mem_mb 3000 \
     --fs-license-file /projects/b1081/singularity_images/freesurfer_license.txt \
-    --output-spaces MNI152NLin6Asym:res-2
+    --fs-subjects-dir ${BIDS_DIR}/derivatives/freesurfer-6.0.1 \
+    --output-spaces MNI152NLin6Asym:res-2 MNI152NLin6Asym:res-3 \
     --ignore slicetiming --fd-spike-threshold 0.2

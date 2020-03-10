@@ -2,3 +2,6 @@
 .gz
 .DS_Store
 matlab_utilities/
+.out
+#*
+*.#
