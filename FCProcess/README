@@ -1,0 +1,27 @@
+README - FCPROCESS_GrattonLab
+
+Will need to have to run a startup script that links to other relevant files (load_untouch_nii) in the CIFTI resources folder before starting. 
+See my /home/cgv5452/startup.m for example
+
+Having issues with getting Matlab to operate on large NIFTIs.
+Before getting started, test by:
+In terminal:
+> module load matlab
+> matlab -singleCompThread #I've tried running with just 'matlab' alone, but both produced the same error
+
+In matlab window:
+> cd /home/cgv5452/
+> startup % this script sets up needed paths
+> aa = load_nii('/projects/b1081/iNetworks/Nifti/derivatives/preproc_fmriprep-20.0.1/fmriprep/sub-INET003/ses-1/func/sub-INET003_ses-1_task-rest_run-01_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz');
+
+
+So far -
+works on: 
+matlab works, but files don't load: quser23
+fails on: quser24
+
+
+Instructions from Alper for starting an interactive session with more memory:
+srun --x11 --account=b1081 --partition=b1081 --nodes=1 --ntasks-per-node=1 --mem=20G --time=4:00:00 --pty bash -l
+ 
+This command submits an interactive job to b1081 allocation's compute nodes. The job reserves 1 core (--ntasks-per-node flag) from 1 node (-N flag) and 20 Gigabytes memory (--mem flag) for 4 hours (--time flag). The last flag "--pty bash -l" (the last letter is lowercase L) is for opening a bash terminal on the compute node of b1081 so you can work on the resources defined above interactively. You can adjust the time and memory (up to 120G for the current nodes) depending on your analysis time and data size. 
