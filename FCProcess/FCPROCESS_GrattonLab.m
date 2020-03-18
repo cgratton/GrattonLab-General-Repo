@@ -1886,9 +1886,9 @@ for t = 1:length(types)
     
    
     % only make them if they don't exist
-    if ~exist(fnames.([type_names{t} 'maskfile']))
+    %if ~exist(fnames.([type_names{t} 'maskfile']))
         system(['module load singularity; singularity run /projects/b1081/singularity_images/afni_latest.sif 3dresample -dxyz 2 2 2 -prefix ' thisName ' -input ' thisName_orig]);
-    end
+    %end
 end
 
 cd(currentDir);
