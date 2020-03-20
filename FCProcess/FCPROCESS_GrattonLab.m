@@ -533,8 +533,10 @@ switch tmasktype
         for i=1:numdatas
             fprintf('GETTING TMASK FILES\t%d\tsub-%s\tsess-%d\n',i,QC(i).subjectID,QC(i).session);
             
+            QC(i).tmask = [];
             for j=1:size(QC(i).runs,1)
-                QC(i).runtmask{j}= table2array(readtable([boldtmask{i,j}]));                
+                QC(i).runtmask{j}= table2array(readtable([boldtmask{i,j}])); 
+                QC(i).tmask=[QC(i).tmask; QC(i).runtmask{j}];
             end
         end
 end
@@ -550,7 +552,7 @@ for i=1:numdatas %f=1:numdatas
     % i=sortsubs(f);
     
     %fprintf('FCPROCESSING SUBJECT %d sub-%s sess-%s\n',f,QC(i).subjectID,QC(i).session);
-    fprintf('FCPROCESSING SUBJECT %d sub-%s sess-%s\n',i,QC(i).subjectID,QC(i).session);
+    fprintf('FCPROCESSING SUBJECT %d sub-%s sess-%d\n',i,QC(i).subjectID,QC(i).session);
     %pause(2);
     
     %Select voxels in glmmask
@@ -566,7 +568,8 @@ for i=1:numdatas %f=1:numdatas
     %%%
     
     stage=1;
-    allends= 'fmriprep'; %'333';
+    ending= 'fmriprep'; %'333';
+    allends = ending;
     for j=1:size(QC(i).runs,1)
         % CG - changed LASTIMG to not have i or stage counter any longer
         % LASTIMG{i,j,stage} = tboldnii{i,j}(1:end-7); %remove .nii.gz?
@@ -581,7 +584,7 @@ for i=1:numdatas %f=1:numdatas
     
     
     %QC = tempimgsignals(QC,i,tempimg,switches,stage); % CG - do we need this?
-    QC = nuissignals(QC,tboldconf{i});
+    QC = nuissignals(QC,i,tboldconf(i,:));
     QC(i).process{stage}=ending;
     %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg); % CG -needed?
     %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
@@ -591,9 +594,10 @@ for i=1:numdatas %f=1:numdatas
         QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
         QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
     end
-    makepictures(QC(i),stage,switches,[700:200:1300],[0:50:100],50);
-    saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
-    clear LASTIMG; % changed
+    %makepictures(QC(i),stage,switches,[700:200:1300],[0:50:100],100);
+    makepictures_vCG(QC(i),stage,[700:200:1300],[0:50:100],200);    
+    saveas(gcf,[QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+    close(gcf);
     
     
     %%%%%%%%%%%%%%%%%%%%%%%%
@@ -606,11 +610,11 @@ for i=1:numdatas %f=1:numdatas
     for j=1:size(QC(i).runs,1)
         LASTIMG{i,j,stage}=[ LASTIMG{i,j,stage-1} '_' ending ];
     end
-    LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
+    %LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
     
     % for each BOLD run
     for j=1:size(QC(i).runs,1)
-        fprintf('\tDEMEAN DETREND\trun%s\n',cell2mat(QC(i).runs(j,:)));
+        fprintf('\tDEMEAN DETREND\trun%d\n',QC(i).runs(j));
         tic;
         temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
         temprun=demean_detrend(temprun,QC(i).runtmask{j});
@@ -628,9 +632,10 @@ for i=1:numdatas %f=1:numdatas
         QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
         QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
     end
-    makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
-    saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
-    
+    %makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
+    makepictures_vCG(QC(i),stage,[-20:20:20],[0:50:100],200);    
+    saveas(gcf,[QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+    close(gcf);
     
     %%%%%%%%%%%%%%%%%%%%%%%%
     %%% MULTIPLE REGRESSION %%%
@@ -684,34 +689,20 @@ for i=1:numdatas %f=1:numdatas
         switch switches.regressiontype
             case {0,1}
                 if switches.GS
-                    if nnz(QC(i).GLMMASK_glmmask)
-                        %sig=mean(tempimg(QC(i).GLMMASK_glmmask,:))';
-                        sig = QC(i).global_signal;
+                    sig = QC(i).global_signal;
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'WB'}];
-                    else
-                        fprintf('Whole brain mask empty: %s\n',QC(i).GLMmaskfile);
-                    end
                 end
                 if switches.WM
-                    if nnz(QC(i).WMMASK_glmmask)
-                        %sig=mean(tempimg(QC(i).WMMASK_glmmask,:))';
-                        sig = QC(i).white_matter;
+                    sig = QC(i).white_matter;
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'WM'}];
-                    else
-                        fprintf('Whole brain mask empty: %s\n',QC(i).WMMmaskfile);
-                    end
+                    
                 end
                 if switches.V
-                    if nnz(QC(i).CSFMASK_glmmask)
-                        %sig=mean(tempimg(QC(i).CSFMASK_glmmask,:))';
-                        sig = QC(i).csf;
+                    sig = QC(i).csf;
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'V'}];
-                    else
-                        fprintf('Whole brain mask empty: %s\n',QC(i).CSFmaskfile);
-                    end
                 end
                 if ~isempty(QC(i).sigregs)
                     QC(i).sigregs=[QC(i).sigregs [repmat(0,[1 size(QC(i).sigregs,2)]); diff(QC(i).sigregs)]];
@@ -724,19 +715,19 @@ for i=1:numdatas %f=1:numdatas
         
         QC(i).nuisanceregressors=[QC(i).mvmregs QC(i).sigregs];
         QC(i).nuisanceregressorlabels=[QC(i).mvmlabels QC(i).siglabels];
-        dlmwrite('total_nuisance_regressors.txt',QC(i).nuisanceregressors,'\t');
+        dlmwrite([QC(i).sessdir_out 'total_nuisance_regressors.txt'],QC(i).nuisanceregressors,'\t');
         
         subplot(8,1,8);
         imagesc(zscore(QC(i).nuisanceregressors)',[-2 2]); ylabel('REGS');
-        saveas(gcf,'total_nuisance_regressors.tiff','tiff');
+        saveas(gcf,[QC(i).sessdir_out 'total_nuisance_regressors.tiff'],'tiff');
         
         % write the correlations of the nuisance regressors
         clf;
         h=imagesc(triu(corrcoef(QC(i).nuisanceregressors),1),[-.5 1]);
         colorbar;
-        saveas(gcf,'total_nuisance_regressors_correlations.tiff','tiff');
+        saveas(gcf,[QC(i).sessdir_out 'total_nuisance_regressors_correlations.tiff'],'tiff');
         close;
-        dlmwrite('total_nuisance_regressors_correlations.txt',corrcoef(QC(i).nuisanceregressors),'\t');
+        dlmwrite([QC(i).sessdir_out 'total_nuisance_regressors_correlations.txt'],corrcoef(QC(i).nuisanceregressors),'\t');
         close;
         
         tic
@@ -763,8 +754,10 @@ for i=1:numdatas %f=1:numdatas
             QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
         end
-        makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
-        saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+        %makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
+        makepictures_vCG(QC(i),stage,[-20:20:20],[0:50:100],200);    
+        saveas(gcf,[QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+        close(gcf);
         
     end
     
@@ -901,9 +894,10 @@ for i=1:numdatas %f=1:numdatas
             QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
         end
-        makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
-        saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
-        
+        %makepictures(QC(i),stage,switches,[-20:20:20],[0:50:100],50);
+        makepictures_vCG(QC(i),stage,[-20:20:20],[0:50:100],200);    
+        saveas(gcf,[QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+        close(gcf);
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%
@@ -959,8 +953,10 @@ for i=1:numdatas %f=1:numdatas
             QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
             QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
         end
-        makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
-        saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+        %makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
+        makepictures_vCG(QC(i),stage,[-20:20:20],[0:50:100],200);    
+        saveas(gcf,[QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+        close(gcf);
         
         % create temporal mask based on filter properties
         filtertrim=15; % TRs at beginning and end of run to ignore due to IIR zero-phase filter
@@ -1012,9 +1008,10 @@ for i=1:numdatas %f=1:numdatas
         QC(i).WMtcs(:,:,stage)=single(tempimg(QC(i).WMMASK_glmmask,:));
         QC(i).CSFtcs(:,:,stage)=single(tempimg(QC(i).CSFMASK_glmmask,:));
     end
-    makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
-    saveas(gcf,[QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
-    
+    %makepictures(QC(i),stage,switches,[-20:20:20],[0:10:20],10);
+    makepictures_vCG(QC(i),stage,[-20:20:20],[0:50:100],200);    
+    saveas(gcf,[QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) 'stage-' num2str(stage) '-' allends '.tiff'],'tiff');
+    close(gcf);
     
     %%%%%%%%%%%%%%%%%%%%%%%%
     %%% SPATIAL BLUR %%%
@@ -1203,16 +1200,16 @@ system('rm tmpAB');
 %     fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
 % end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [fcimg]=bolds2img(bolds,trtot,trborders,GLMmask)
-
-vox = nnz(GLMmask);
-%vox=902629;%147456;
-fcimg=zeros(vox,trtot);
-for j=1:size(bolds,1)
-    temp = read_4dfpimg_HCP(bolds{j,1});
-    %    fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
-    fcimg(:,trborders(j,1):trborders(j,2))=temp(logical(GLMmask),:);
-end
+% function [fcimg]=bolds2img(bolds,trtot,trborders,GLMmask)
+% 
+% vox = nnz(GLMmask);
+% %vox=902629;%147456;
+% fcimg=zeros(vox,trtot);
+% for j=1:size(bolds,1)
+%     temp = read_4dfpimg_HCP(bolds{j,1});
+%     %    fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
+%     fcimg(:,trborders(j,1):trborders(j,2))=temp(logical(GLMmask),:);
+% end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [fcimg]=bolds2mat(bolds,trtot,trborders,GLMmask)
@@ -1220,7 +1217,7 @@ function [fcimg]=bolds2mat(bolds,trtot,trborders,GLMmask)
 vox = nnz(GLMmask);
 %vox=902629;%147456;
 fcimg=zeros(vox,trtot);
-for j=1:size(bolds,1)
+for j=1:size(bolds,2)
     temp = load_untouch_nii_wrapper([bolds{j} '.nii.gz']);
     %temp = read_4dfpimg_HCP(bolds{j,1});
     %    fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
@@ -1499,9 +1496,9 @@ function QC = nuissignals(QC,i,tboldconf)
 % CG - added in to draw confound signals from fmriprep output
 
 % relevant confounds to carry forward:
-conf_names = {'csf','csf_derivarive1','csf_power2','csf_derivative1_power2',...
-    'white_matter','white_matter_derivarive1','white_matter_power2','white_matter_derivative1_power2',...
-    'global_signal','global_signal_derivarive1','global_signal_power2','global_signal_derivative1_power2',...
+conf_names = {'csf','csf_derivative1','csf_power2','csf_derivative1_power2',...
+    'white_matter','white_matter_derivative1','white_matter_power2','white_matter_derivative1_power2',...
+    'global_signal','global_signal_derivative1','global_signal_power2','global_signal_derivative1_power2',...
     'std_dvars','dvars'};
 
 %prep structure with empty arrays
@@ -1510,16 +1507,19 @@ for cn = 1:length(conf_names)
 end
 
 % load confounds signals from fmriprep
-for j = 1:length(tboldconf)
+for j = 1:length(QC(i).runs)
     run_confounds = bids.util.tsvread(tboldconf{j});
     for cn = 1:length(conf_names)
-        QC(i).(conf_names{cn}) = [QC(i).(conf_names{cn}) run_confounds.(conf_names{cn})];
+        QC(i).(conf_names{cn}) = [QC(i).(conf_names{cn}); run_confounds.(conf_names{cn})];
     end
 end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function makepictures(QC,stage,switches,rightsignallim,leftsignallim,FDmult)
+
+% FOR TESTING:
+ set(0, 'DefaultFigureVisible', 'on');
 
 rylimz=[min(rightsignallim) max(rightsignallim)];
 lylimz=[min(leftsignallim) max(leftsignallim)];
@@ -1533,15 +1533,16 @@ pointindex=1:numpts;
 set(h(1),'xlim',[0 numpts],'ylim',lylimz,'ycolor',[0 0 0],'ytick',leftsignallim);
 ylabel('B:DV G:GS');
 set(a(1),'color',[0 0 1]);
-set(h(2),'xlim',[0 numpts],'ycolor',[0 0 0],'xlim',[0 numel(QC.DV_GLM(:,stage))],'ylim',rylimz,'ytick',rightsignallim);
+set(h(2),'xlim',[0 numpts],'ycolor',[0 0 0],'xlim',[0 numel(QC.dvars)],'ylim',rylimz,'ytick',rightsignallim);
 set(a(2),'color',[0 .5 0]);
 axis(h(1)); hold on;
 h3=plot([1:numpts],QC.FD*FDmult,'r');
+h4=plot([1:numpts],QC.fFD*FDmult,'Color',[0.8 0 0]);
 hold off;
 axes(h(2)); hold(h(2),'on');
 hline(0,'k');
 hold(h(2),'off');
-set(h(1),'children',[a(1) h3]);
+set(h(1),'children',[a(1) h3 h4]);
 set(h(1),'YaxisLocation','left','box','off');
 set(h(2),'xaxislocation','top','xticklabel','');
 if switches.regressiontype==1 | switches.regressiontype==9
@@ -1554,7 +1555,57 @@ if switches.regressiontype==1 | switches.regressiontype==9
     imagesc([QC.WMtcs(:,:,stage);QC.CSFtcs(:,:,stage)],rylimz); ylabel('WM CSF');
 end
 
-warning('fix this grayplot to look like CG wants');
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function f = makepictures_vCG(QC,stage,rightsignallim,leftsignallim,FDmult)
+
+% FOR TESTING:
+set(0, 'DefaultFigureVisible', 'on');
+
+% constants
+numpts=numel(QC.FD);
+%rightsignallim = [-20:20]; %GS limits (2% assuming mode 1000 normalization)
+%lefsignallim = [0:20:10]; % DVARS limits
+rylimz=[min(rightsignallim) max(rightsignallim)];
+lylimz=[min(leftsignallim) max(leftsignallim)];
+%FDmult = 10; %multiplier to get FD in range of DVARS values
+
+f = figure('Position',[1 1 1000 1000]);
+
+% subplot1 = mvm
+subplot(9,1,1:2);
+pointindex=1:numpts;
+plot(pointindex,QC.MVM);
+xlim([0 numpts]);
+ylim([-1.5 1.5]);
+ylabel('mvm');
+
+% subplot2 = DVARS, GS, and FD
+subplot(9,1,3:4)
+%[h a(1) a(2)]=plotyy(pointindex,QC.DV_GLM(:,stage),pointindex,QC.MEAN_GLM(:,stage));
+[h a(1) a(2)]=plotyy(pointindex,QC.dvars,pointindex,QC.global_signal);
+set(h(1),'xlim',[0 numpts],'ylim',lylimz,'ycolor',[0 0 0],'ytick',leftsignallim);
+ylabel(sprintf('B:DV G:GS R:FD*%d C:fFD*%d',FDmult,FDmult));
+set(a(1),'color',[0 0 1]);
+set(h(2),'xlim',[0 numpts],'ycolor',[0 0 0],'xlim',[0 numel(QC.dvars)],'ylim',rylimz,'ytick',rightsignallim);
+set(a(2),'color',[0 .5 0]);
+axis(h(1)); hold on;
+h3=plot([1:numpts],QC.FD*FDmult,'r');
+h4=plot([1:numpts],QC.fFD*FDmult,'c');
+hold off;
+axes(h(2)); hold(h(2),'on');
+hline(0,'k');
+hold(h(2),'off');
+set(h(1),'children',[a(1) h3 h4]);
+set(h(1),'YaxisLocation','left','box','off');
+set(h(2),'xaxislocation','top','xticklabel','');
+
+% subplots 3-4: 
+subplot(9,1,5:8);
+imagesc(QC.GMtcs(:,:,stage),rylimz); colormap(gray); ylabel('GRAY');
+subplot(9,1,9);
+imagesc([QC.WMtcs(:,:,stage);QC.CSFtcs(:,:,stage)],rylimz); ylabel('WM CSF');
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1886,9 +1937,9 @@ for t = 1:length(types)
     
    
     % only make them if they don't exist
-    %if ~exist(fnames.([type_names{t} 'maskfile']))
+    if ~exist(fnames.([type_names{t} 'maskfile']))
         system(['module load singularity; singularity run /projects/b1081/singularity_images/afni_latest.sif 3dresample -dxyz 2 2 2 -prefix ' thisName ' -input ' thisName_orig]);
-    %end
+    end
 end
 
 cd(currentDir);
