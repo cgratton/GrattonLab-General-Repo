@@ -928,6 +928,7 @@ for i=1:numdatas %f=1:numdatas
                 [butta buttb]=butter(filtorder,[hipasscutoff lopasscutoff]);
         end
         
+        aa = tempimg;
         for j=1:size(QC(i).runs,1)
             fprintf('\tTEMPORAL FILTER\trun%d\n',QC(i).runs(j,:));
             tic;
@@ -936,7 +937,7 @@ for i=1:numdatas %f=1:numdatas
             size_temprun = size(temprun);
             pad = 1000;
             temprun = cat(1, zeros(pad, size_temprun(2)), temprun, zeros(pad, size_temprun(2)));
-            [aa]=filtfilt(butta,buttb,double(temprun));
+            [temprun]=filtfilt(butta,buttb,double(temprun));
             temprun = temprun(pad+1:end-pad, 1:size_temprun(2));
             temprun=temprun';
             tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3))=temprun;
@@ -962,7 +963,7 @@ for i=1:numdatas %f=1:numdatas
         filtertrim=15; % TRs at beginning and end of run to ignore due to IIR zero-phase filter
         QC(i).filtertmask=[];
         
-        for j=1:size(QC(i).restruns,1)
+        for j=1:size(QC(i).runs,1)
             QC(i).runfiltertmask{j}=QC(i).runtmask{j};
             QC(i).runfiltertmask{j}(1:filtertrim)=0;
             QC(i).runfiltertmask{j}(end-filtertrim+1:end)=0;
@@ -986,7 +987,7 @@ for i=1:numdatas %f=1:numdatas
     
     % for each BOLD run
     for j=1:size(QC(i).runs,1)
-        fprintf('\tDEMEAN DETREND\trun%s\n',cell2mat(QC(i).restruns(j,:)));
+        fprintf('\tDEMEAN DETREND\trun%d\n',QC(i).runs(j,:));
         tic;
         temprun=tempimg(:,QC(i).runborders(j,2):QC(i).runborders(j,3));
         if switches.dobandpass
@@ -1019,6 +1020,7 @@ for i=1:numdatas %f=1:numdatas
     
     % CG - commented this out for now.
     % EITHER do blurring through another tool (AFNI?) or on the surface
+    
 %     if switches.doblur
 %         stage=stage+1;
 %         ending=[ 'g' num2str(round(blursize*10)) ];
@@ -1089,7 +1091,7 @@ for i=1:numdatas %f=1:numdatas
         warning('check if anything else needs to be changed in header?');
         clear origdat;
 
-        outdat.img = tempimg_out(:,:,:,tr(i).start(j,1):tr(i).start(j,2));
+        outdat.img = tempimg_out(:,tr(i).start(j,1):tr(i).start(j,2));
         outdat.hdr = hdr;
         out_fname = [QC(i).sessdir_out QC(i).naming_str{j} '_' allends '.nii.gz'];
         save_untouch_nii(outdat,out_fname);
