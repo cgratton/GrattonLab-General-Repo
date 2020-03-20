@@ -1,24 +1,34 @@
 README - FCPROCESS_GrattonLab
 
-Will need to have to run a startup script that links to other relevant files (load_untouch_nii) in the CIFTI resources folder before starting. 
-See my /home/cgv5452/startup.m for example
+First, you'll need to set up a datalist. See EXAMPLE_DATALIST.xlsx for an example
 
-Having issues with getting Matlab to operate on large NIFTIs.
-Before getting started, test by:
-In terminal:
+Then, to run:
+- open terminal on Quest
+- in terminal, type:
+> srun --x11 --account=b1081 --partition=b1081 --nodes=1 --ntasks-per-node=1 --mem=40G --time=4:00:00 --pty bash -l
+# see additional details below. Note that > 20 GB is needed for rest runs
+- then type:
 > module load matlab
-> matlab -singleCompThread #I've tried running with just 'matlab' alone, but both produced the same error
+> matlab -singleCompThread
+- In matlab window,run a startup script that links to other relevant files (load_untouch_nii) in the CIFTI resources folder before starting. 
+See my /home/cgv5452/startup.m for example
+> startup
+- Then navigate to your github repo location and run FCPROCESS script. Example:
+> FCPROCESS_GrattonLab('EXAMPLESUB_DATALIST.xlsx','/projects/b1081/iNetworks/Nifti/derivatives/preproc_FCProc/','defaults2');
 
-In matlab window:
+
+------
+If you're having crashing issues with MATLAB, try the commands below before starting to make sure it's not a memory issue with loading nifti files:
 > cd /home/cgv5452/
 > startup % this script sets up needed paths
 > aa = load_nii('/projects/b1081/iNetworks/Nifti/derivatives/preproc_fmriprep-20.0.1/fmriprep/sub-INET003/ses-1/func/sub-INET003_ses-1_task-rest_run-01_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz');
 
 
 So far -
-works on: 
 matlab works, but files don't load: quser23
 fails on: quser24
+works consistently with srun command above
+------
 
 
 Instructions from Alper for starting an interactive session with more memory:
