@@ -1079,29 +1079,29 @@ for i=1:numdatas %f=1:numdatas
     fprintf('\tCONCATENATE AND CLEANUP\n');
     %cd(QC(i).subdir);
     tempimg_out = zeros(size(QC(i).GLMMASK,1),size(tempimg,2)); %Put back in volume space
-    tempimg_out(logical(QC(i).GLMMASK),:) = tempimg; %Put back in volume space
-    clear tempimg
+    tempimg_out(logical(QC(i).GLMMASK),:) = tempimg;
+    tmpavg = load_untouch_nii(tboldavgnii{i,j});
+    d = size(tmpavg.img);
+    dims_bold = [d(1) d(2) d(3) size(tempimg,2)];
+    tempimg_out = reshape(tempimg_out,dims_bold);
+    clear tempimg tmpavg d;
     
     %write_4dfpimg(tempimg_out,[ QC(i).vcnum '_' allends '.4dfp.img'],'bigendian');
     %write_4dfpifh([ QC(i).vcnum '_' allends '.4dfp.img'],size(tempimg_out,2),'bigendian');
     % save a separate file for each run so not too huge
     for j = 1:length(QC(i).runs)
-        origdat = load_untouch_nii(tboldnii{i,j});
-        hdr = origdat.hdr; % save header info for saving out data 
-        warning('check if anything else needs to be changed in header?');
-        clear origdat;
-
-        outdat.img = tempimg_out(:,tr(i).start(j,1):tr(i).start(j,2));
-        outdat.hdr = hdr;
+        outdat = load_untouch_nii(tboldnii{i,j});
+        outdat.img = tempimg_out(:,:,:,tr(i).start(j,1):tr(i).start(j,2));
         out_fname = [QC(i).sessdir_out QC(i).naming_str{j} '_' allends '.nii.gz'];
+        outdat.fileprefix = out_fname;
         save_untouch_nii(outdat,out_fname);
         clear outdat;
     end
     
     % save QC file per session
-    QC_outname = [QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) '_QC.mat'];
+    QC_outname = [QC(i).sessdir_out QC(i).naming_str{1}(1:end-6) 'QC.mat'];
     QCsub = QC(i);
-    save(QC_outname,'QCsub');
+    save(QC_outname,'QCsub','-v7.3');
     clear QCsub;
     
     
@@ -1521,7 +1521,7 @@ end
 function makepictures(QC,stage,switches,rightsignallim,leftsignallim,FDmult)
 
 % FOR TESTING:
- set(0, 'DefaultFigureVisible', 'on');
+% set(0, 'DefaultFigureVisible', 'on');
 
 rylimz=[min(rightsignallim) max(rightsignallim)];
 lylimz=[min(leftsignallim) max(leftsignallim)];
@@ -1563,7 +1563,7 @@ end
 function f = makepictures_vCG(QC,stage,rightsignallim,leftsignallim,FDmult)
 
 % FOR TESTING:
-set(0, 'DefaultFigureVisible', 'on');
+%set(0, 'DefaultFigureVisible', 'on');
 
 % constants
 numpts=numel(QC.FD);
@@ -1573,7 +1573,7 @@ rylimz=[min(rightsignallim) max(rightsignallim)];
 lylimz=[min(leftsignallim) max(leftsignallim)];
 %FDmult = 10; %multiplier to get FD in range of DVARS values
 
-f = figure('Position',[1 1 1000 1000]);
+f = figure('Position',[1 1 1500 1000]);
 
 % subplot1 = mvm
 subplot(9,1,1:2);
