@@ -1,60 +1,40 @@
 function FCPROCESS_GrattonLab(datafile,outputDir,varargin)
 % This script is the fcprocessing script, originally from the Petersen
 % lab, now for the Gratton lab.
-% FCPROCESS(datalist,targetdir,tmasktype,freesurferlist)
-% initial proc: FCPROCESS('datalist.txt','/put/data/here/','ones','fsinfo.txt');
-% final proc:   FCPROCESS('datalist.txt','/put/data/here/','specificmasks.txt','fsinfo.txt');
+% FCPROCESS(datalist,outputDir,varargin)
+% Example:
+% FCPROCESS_GrattonLab('EXAMPLESUB_DATALIST.xlsx','/projects/b1081/iNetworks/Nifti/derivatives/preproc_FCProc/','defaults2');
 %
-% The datalist specifies the data to process, and is a 8-column file:
-% subid sessid condid TR skipframes preprocstr srcdir prmsfile
+% The datalist specifies the data to process, and is a 10-column tab-delimited xlsx file:
+% subid sessid taskid TR skipframes topDir dataFolder confoundsFolder FDtype runs
 % e.g.:
-% INET001 1 rest 1.1 0 afni_pb03.tcat.despike.scale.volreg /projects/iNetworks/Nifti/derivatives/preproc_afni/ fcparams
-% INET001 2 rest 1.1 0 afni_pb03.tcat.despike.scale.volreg /projects/iNetworks/Nifti/derivatives/preproc_afni/ fcparams
+% INET003	1	rest	 1.1	5	/projects/b1081/iNetworks/Nifti/derivatives	preproc_fmriprep-1.5.8_MOD5	preproc_fmriprep-1.5.8_MOD5 fFD 1,2,3,4,5,6,7
 %
-% We presume the file structure for fMRI data:
-% /srcdir
-%   /subid
-%       /sesid
-%           subid_ses-sesid_task-taskid_run-runnum_preprocstr.nii
-%           ...
-%           subid_ses-sesid_task-taskid.fcparams
-%       /anat_ses-all
+% We presume the BIDS file structure for fMRI data
 %
-% Where the bold# for runs to analyze are specified in the prmfile, which
-% contains the single line:
-% set boldruns = (X Y whatever the bold run numbers are)
-% e.g: set boldruns = (2 4 6)
-%
-% The srcdir needs to be a hard path, and prmfile is assumed to be in the
-% sesid directory
-%
-% The TR is obvious, and the skipframes are the number of frames to skip at
-% the beginning of each run (we typically set this to 0 now and remove later, but other common settings include: 5 frames, 30 seconds).
-%
-% targetdir: where to write files to (e.g., '/projects/iNetworks/Nifti/derivatives/FCProcess_initial/INET001/ses-1_task-rest/')
-% IMPORTANT: fcp_process removes the /newtargetdir/vcdir/ folder when it
-% begins processing a subject, so DO NOT set the targetdir to the directory
+% outputDir: where to write files to (e.g., '/projects/iNetworks/Nifti/derivatives/FCProcess_initial/INET001/ses-1_task-rest/')
+% IMPORTANT: fcp_process removes the /newtargetdir/sub/sess folder when it
+% begins processing a new session, so DO NOT set the outputdir to the directory
 % where your 333 BOLD data exist - use a new directory, specific to FC
-% data. Since fcp_initial_process is a wrapper for fcp_process, this goes
-% for that script too.
+% data. 
 %
-% tmasktype can be one of two things:
-%     'ones' - just skips the skipframes at the start of each run
-%     tmasklist - a tmasklist from COHORTSELECTOR.m
-% freesurferlist: a file with 2 columns, the first the subject ID, the second
-% 	where the freesurfer segmentation exists that was used for MAKE_FS_MASKS.csh
-% e.g.,
-% 	vc11111	/data/cn4/segmentation/freesurfer5_supercomputer
-%	vc22222	/data/cn4/segmentation/freesurfer5_supercomputer
+% for now, force to always use tmask for processing, but should be able to
+% change code to use 'ones' = just skip frames at the start of each run,
+% but don't do scrubbing
+%
+% unlike Petersen lab version, nuisance regressors are taken from fmriprep
+% output directly, rather than a freesurfer processing folder
 %
 % The processing order is:
 %    demean/detrend (mask)
 %    extract nuisance signals
 %    multiple regression (mask)
-%    *interpolate* (mask) %% this step takes a while
+%    *interpolate* (mask) %% this step takes a while, but faster now
 %    temporal filter (butter1 filtfilt low-pass)
 %    demean/detrend (mask)
-%    spatial blur (gauss_4dfp)
+%    [spatial blur (gauss_4dfp)] - NO LONGER DONE
+%
+% Not yet set up for computing task residuals
 %
 % originally written by: jdp 2/22/2012
 % CG 2017: working off of T. Laumann's FCPROCESS_MSC.m version Editing to work with task residuals data
@@ -63,11 +43,6 @@ function FCPROCESS_GrattonLab(datafile,outputDir,varargin)
 
 
 %% IMPORTANT VARIABLES
-%avidir = '/data/cninds01/data2/nil-tools';  %CG - replace with AFNI functions?
-%avidir = '/projects/b1081/Scripts/4dfp_tools/';  %CG - replace with AFNI functions?
-% % %releasedir = '/data/petsun4/data1/solaris'; CG - get AFNI functions?
-% % %roidir='/home/usr/fidl/lib/'; CG - do we ever use this?
-%startdir=pwd;
 tmasktype = 'regular'; %'ones' or something else (ones = take everything except short periods at the start of each scan
 space = 'MNI152NLin6Asym';
 res = ''; %'','res-2' or 'res-3' (voxel resolutions for output)
