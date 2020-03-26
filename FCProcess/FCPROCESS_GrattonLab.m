@@ -79,6 +79,7 @@ CSFthresh = 0.95;
 set(0, 'DefaultFigureVisible', 'off'); % puts figures in the background while running
 
 
+
 %% READ IN DATALIST
 
 % read in the subject data including location, vcnum, and boldruns
@@ -570,17 +571,19 @@ for i=1:numdatas %f=1:numdatas
     stage=1;
     ending= 'fmriprep'; %'333';
     allends = ending;
+    bolds = [];
     for j=1:size(QC(i).runs,1)
         % CG - changed LASTIMG to not have i or stage counter any longer
         % LASTIMG{i,j,stage} = tboldnii{i,j}(1:end-7); %remove .nii.gz?
-        LASTIMG{j} = tboldnii{i,j}(1:end-7); %remove .nii.gz?
+        LASTIMG{i,j,stage} = tboldnii{i,j}(1:end-7); %remove .nii.gz?
+        bolds{j} = tboldnii{i,j}(1:end-7);
     end
     
     
     
     % obtain the raw images
     %[tempimg]=bolds2img(bolds,tr(i).tot,tr(i).start,QC(i).GLMMASK);
-    tempimg = bolds2mat(LASTIMG,tr(i).tot,tr(i).start,QC(i).GLMMASK);
+    tempimg = bolds2mat(bolds,tr(i).tot,tr(i).start,QC(i).GLMMASK);
     
     
     %QC = tempimgsignals(QC,i,tempimg,switches,stage); % CG - do we need this?
@@ -717,6 +720,7 @@ for i=1:numdatas %f=1:numdatas
         QC(i).nuisanceregressorlabels=[QC(i).mvmlabels QC(i).siglabels];
         dlmwrite([QC(i).sessdir_out 'total_nuisance_regressors.txt'],QC(i).nuisanceregressors,'\t');
         
+        figure('Visible','Off');
         subplot(8,1,8);
         imagesc(zscore(QC(i).nuisanceregressors)',[-2 2]); ylabel('REGS');
         saveas(gcf,[QC(i).sessdir_out 'total_nuisance_regressors.tiff'],'tiff');
@@ -1103,71 +1107,6 @@ for i=1:numdatas %f=1:numdatas
     QCsub = QC(i);
     save(QC_outname,'QCsub','-v7.3');
     clear QCsub;
-    
-    
-    
-    % create a final DV file
-    %system(['cp total_DV_' LASTCONC{stage} '.txt total_DV_final.txt']);
-    
-    
-    % write summary log file
-%     cd(QC(i).subdir);
-%     fid=fopen('processing_log.txt','w');
-%     fprintf(fid,'Subject: %s\n',QC(i).subjectID);
-%     fprintf(fid,'Sourcedir: %s\n',df.filepath{i});
-%     fprintf(fid,'Sourceprm: %s\n',df.prmfile{i});
-%     fprintf(fid,'set boldruns = (');
-%     for j=1:size(QC(i).restruns,1)
-%         fprintf(fid,'%d',cell2mat(QC(i).restruns(j,:)));
-%         if j~=size(QC(i).restruns,1)
-%             fprintf(fid,' ');
-%         end
-%     end
-%     fprintf(fid,')\n');
-%     fprintf(fid,'tmasktype: %s\n',tmasktype);
-%     if ~isequal(tmasktype,'ones')
-%         fprintf(fid,'%s',tm.tmaskfiles{i,1});
-%     end
-%     fprintf(fid,'switches.doregression (1=yes;0=no): %d\n',switches.doregression);
-%     fprintf(fid,'switches.regressiontype (0=classic;1=freesurfer;2=user4dfp;3:usertxt): %d\n',switches.regressiontype);
-%     fprintf(fid,'switches.motionestimates (0=no; 1=R,R`; 2=FRISTON; 20=R,R`,12rand): %d\n',switches.motionestimates);
-%     fprintf(fid,'switches.WM (1=regress;0=no): %d\n',switches.WM);
-%     fprintf(fid,'switches.V (1=regress;0=no): %d\n',switches.V);
-%     fprintf(fid,'switches.GS (1=regress;0=no): %d\n',switches.GS);
-%     fprintf(fid,'switches.dointerpolate (1=yes;0=no): %d\n',switches.dointerpolate);
-%     fprintf(fid,'switches.dobandpass (1=yes;0=no): %d\n',switches.dobandpass);
-%     fprintf(fid,'switches.temporalfiltertype (1=lowpass;2=hipass;3=bandpass): %d\n',switches.temporalfiltertype);
-%     fprintf(fid,'switches.lopasscutoff (in Hz; 0.08 is typical): %g\n',switches.lopasscutoff);
-%     fprintf(fid,'switches.hipasscutoff (in Hz; 0.009 is typical): %g\n',switches.hipasscutoff);
-%     fprintf(fid,'switches.order (1 is typical): %g\n',switches.order);
-%     fprintf(fid,'switches.doblur (1=yes;0=no): %d\n',switches.doblur);
-%     fprintf(fid,'switches.blurkernel (in mm; 6 is typical): %d\n',switches.blurkernel);
-%     fprintf(fid,'PROCESSING STEPS\n');
-%     for j=1:numel(LASTCONC)
-%         fprintf(fid,'%s\n',LASTCONC{j});
-%     end
-%     fclose(fid);
-    
-    % write a tiff of the QC figures for this subject
-%     close;
-%     QC(i).numTRs=numel(QC(i).FD);
-%     subplot(3,1,1);
-%     plot(QC(i).FD,'r');
-%     xlim([0 QC(i).numTRs]);
-%     ylim([0 1]); ylabel('FD');
-%     subplot(3,1,2); [figaxis]=plotyy(1:QC(i).numTRs,QC(i).DV_GLM(:,1),1:QC(i).numTRs,QC(i).DV_GLM(:,end));
-%     set(figaxis(1),'ylim',[0 50],'ytick',[0 50],'xlim',[0 QC(i).numTRs]);
-%     set(figaxis(2),'ylim',[0 5],'ytick',[0 5],'xlim',[0 QC(i).numTRs]);
-%     ylabel('DV');
-%     r1=corrcoef([QC(i).FD(QC(i).tmask) QC(i).DV_GLM(QC(i).tmask,1)]);
-%     r1=r1(2,1);
-%     r2=corrcoef([QC(i).FD(QC(i).tmask) QC(i).DV_GLM(QC(i).tmask,end)]);
-%     r2=r2(2,1);
-%     legend({['333 r=' num2str(r1,2) ],['final r=' num2str(r2,2)]});
-%     hold on;
-%     subplot(3,1,3); imagesc(QC(i).tmask');
-%     saveas(gcf,'total_QC.tiff','tiff');
-%     close;
     
 end
 
@@ -1560,10 +1499,10 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function f = makepictures_vCG(QC,stage,rightsignallim,leftsignallim,FDmult)
+function makepictures_vCG(QC,stage,rightsignallim,leftsignallim,FDmult)
 
 % FOR TESTING:
-%set(0, 'DefaultFigureVisible', 'on');
+%set(0, 'DefaultFigureVisible', 'off');
 
 % constants
 numpts=numel(QC.FD);
@@ -1573,7 +1512,7 @@ rylimz=[min(rightsignallim) max(rightsignallim)];
 lylimz=[min(leftsignallim) max(leftsignallim)];
 %FDmult = 10; %multiplier to get FD in range of DVARS values
 
-f = figure('Position',[1 1 1500 1000]);
+figure('Position',[1 1 1500 1000],'Visible','Off');
 
 % subplot1 = mvm
 subplot(9,1,1:2);

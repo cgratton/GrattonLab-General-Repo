@@ -5,7 +5,7 @@ First, you'll need to set up a datalist. See EXAMPLE_DATALIST.xlsx for an exampl
 Then, to run:
 - open terminal on Quest
 - in terminal, type:
-> srun --x11 --account=b1081 --partition=b1081 --nodes=1 --ntasks-per-node=1 --mem=40G --time=4:00:00 --pty bash -l
+> srun --x11 --account=b1081 --partition=b1081 --nodes=1 --ntasks-per-node=1 --mem=60G --time=4:00:00 --pty bash -l
 # see additional details below. Note that > 20 GB is needed for rest runs
 - then type:
 > module load matlab
