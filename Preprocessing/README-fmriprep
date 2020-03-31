@@ -1,5 +1,6 @@
 %%% README - how to run fmriprep for lab preprocessing on Quest
 % Edited: 02/11/2020 by CG
+% Edited to version 20.0.1 on 03/31/2020 by CG
 
 Steps:
 1. Make sure you have singularity on Quest in version you want (should only need to be done occasionally)
@@ -17,11 +18,11 @@ Example call:
    > module load singularity
 
 5. Run fmriprep through lab command.
-   > sbatch fmriprep_batch_script_1.5.8_MOD5.sh
+   > sbatch fmriprep_batch_script_20.0.1.sh
 Before starting, edit the sbatch commands as needed (remember email!) and also the inputs that are being given (i.e., subject ID, freesurfer path, working directory path, etc.)
 This takes ~1 day with the current settings on an iNetworks subject. Monitor progress through slurm output files and by looking at qstat list.
 
-If freesurfer has not been run expect this will take ~ XXX hrs
+If freesurfer has not been run expect this will take ~1.5 days
 
 If you want any other version, check the following documentation and edit fmriprep command as needed:
 https://fmriprep.readthedocs.io/en/stable/
