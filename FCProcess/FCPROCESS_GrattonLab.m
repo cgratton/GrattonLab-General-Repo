@@ -1059,7 +1059,7 @@ for i=1:numdatas %f=1:numdatas
     %cd(QC(i).subdir);
     tempimg_out = zeros(size(QC(i).GLMMASK,1),size(tempimg,2)); %Put back in volume space
     tempimg_out(logical(QC(i).GLMMASK),:) = tempimg;
-    tmpavg = load_untouch_nii(tboldavgnii{i,j});
+    tmpavg = load_untouch_nii(tboldavgnii{i,1}); 
     d = size(tmpavg.img);
     dims_bold = [d(1) d(2) d(3) size(tempimg,2)];
     tempimg_out = reshape(tempimg_out,dims_bold);
