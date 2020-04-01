@@ -42,7 +42,7 @@ find ${BIDS_DIR}/derivatives/freesurfer-6.0.1/sub-$subject/ -name "*IsRunning*" 
 echo "Begin Preprocessing"
 
 singularity run --cleanenv -B /projects/b1081:/projects/b1081 \
-    /projects/b1081/singularity_images/fmriprep-1.5.8.simg \
+    /projects/b1081/singularity_images/fmriprep-20.0.1.simg \
     ${BIDS_DIR} \
     ${BIDS_DIR}/${DERIVS_DIR} \
     participant --participant-label ${subject} \
