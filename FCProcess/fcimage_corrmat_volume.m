@@ -45,8 +45,13 @@ for i = 1:numdatas
     
     fprintf('Subject %s, session %d\n',subInfo(i).subjectID,subInfo(i).session);
     
-    sess_roi_timeseries_concat{i} = [];
-    tmask_concat{i} = [];
+    sess_roi_timeseries_concat = [];
+    tmask_concat = [];
+    
+    outDir = [outDir_top '/sub-' subInfo(i).subjectID '/sess-' num2str(subInfo(i).session)];
+    if ~exist(outDir) 
+        mkdir(outDir);
+    end
     
     for j = 1:length(subInfo(i).runs)
         
@@ -58,22 +63,30 @@ for i = 1:numdatas
             subInfo(i).subjectID,subInfo(i).session,subInfo(i).condition,subInfo(i).runs(j));
         sess_data = load_untouch_nii_wrapper(procFile); %vox by timepoints
         
-        sess_roi_timeseries{i,j} = roi_average_timecourse(sess_data,roi_data);
-        sess_roi_timeseries_concat{i} = [sess_roi_timeseries_concat{i} sess_roi_timeseries{i,j}];
+        sess_roi_timeseries{j} = roi_average_timecourse(sess_data,roi_data);
+        sess_roi_timeseries_concat = [sess_roi_timeseries_concat sess_roi_timeseries{j}];
         
         % tmask file:
         tmaskFile = sprintf('%s/sub-%s/ses-%d/func/FD_outputs/sub-%s_ses-%d_task-%s_run-%02d_desc-tmask_%s.txt',...
             FCdir,subInfo(i).subjectID,subInfo(i).session,...
             subInfo(i).subjectID,subInfo(i).session,subInfo(i).condition,subInfo(i).runs(j),subInfo(i).FDtype);
-        tmask{i,j} = table2array(readtable(tmaskFile));
-        tmask_concat{i} = [tmask_concat{i}; tmask{i,j}];
+        tmask{j} = table2array(readtable(tmaskFile));
+        tmask_concat = [tmask_concat; tmask{j}];
                 
     end
     
     % apply tmask to timeseries and calculate correlations
-    sess_roi_correlations{i} = paircorr_mod(sess_roi_timeseries_concat{i}(:,tmask_concat{i}));
+    corrmat = paircorr_mod(sess_roi_timeseries_concat(:,logical(tmask_concat))');
     
-    figure_corrmat_network_generic(sess_roi_correlatoins{i},atlas_params,[-1 1]);
+    fout_str = sprintf('%s/sub-%s_sess-%d_task-%s_corrmat_%s',outDir,subInfo(i).subjectID,subInfo(i).session,subInfo(i).condition,atlas);
+    
+    figure_corrmat_GrattonLab(corrmat,atlas_params,-1,1);
+    saveas(gcf,[fout_str '.tiff'],'tiff');
+    close(gcf);
+    
+    % save out files
+    save([fout_str '.mat'],'sess_roi_timeseries','sess_roi_timeseries_concat','tmask','tmask_concat','corrmat');
+    
 
 end
 

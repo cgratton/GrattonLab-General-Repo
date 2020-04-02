@@ -102,7 +102,7 @@ elseif strcmp(atlas,'Seitzman300')
     atlas_params.num_rois = 300;
     atlas_params.dist_thresh = 20;
 
-    atlas_params.sorted_by = 'structure'; %sort by 'structure' or 'network' first
+    atlas_params.sorted_by = 'network'; %sort by 'structure' or 'network' first
 
     switch atlas_params.sorted_by
         case 'structure'
