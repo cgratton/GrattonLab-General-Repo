@@ -278,7 +278,7 @@ for i=1:numdatas
         tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_desc-preproc_bold.nii.gz'];
         tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_boldref.nii.gz'];
         tboldmasknii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_desc-brain_mask.nii.gz'];
-        tboldconf{i,j} = [QC(i).sessdir_out all_fstring2 '_desc-confounds_regressors.tsv'];
+        tboldconf{i,j} = [QC(i).sessdir_out all_fstring '_desc-confounds_regressors.tsv'];
         tboldmot_folder{i,j} = [QC(i).sessdir_out 'FD_outputs'];
 
         system(['ln -s ' boldnii{i,j} ' ' tboldnii{i,j}]);
@@ -668,6 +668,7 @@ for i=1:numdatas %f=1:numdatas
             case {0,1}
                 if switches.GS
                     sig = QC(i).global_signal;
+                    sigTEMP=mean(tempimg(QC(i).GLMMASK,:))';
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'WB'}];
                 end
