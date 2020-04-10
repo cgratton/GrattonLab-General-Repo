@@ -563,6 +563,8 @@ for i=1:numdatas %f=1:numdatas
     
     %QC = tempimgsignals(QC,i,tempimg,switches,stage); % CG - do we need this?
     QC = nuissignals(QC,i,tboldconf(i,:));
+    
+    
     QC(i).process{stage}=ending;
     %QC(i).tc(:,:,stage)=gettcs(roimasks,tempimg); % CG -needed?
     %dlmwrite(['total_DV_' LASTCONC{stage} '.txt'],QC(i).DV_GLM(:,stage));
@@ -668,7 +670,7 @@ for i=1:numdatas %f=1:numdatas
             case {0,1}
                 if switches.GS
                     sig = QC(i).global_signal;
-                    sigTEMP=mean(tempimg(QC(i).GLMMASK,:))';
+                    %sigTEMP=mean(tempimg(QC(i).GLMMASK,:))';
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'WB'}];
                 end
@@ -1427,7 +1429,9 @@ end
 for j = 1:length(QC(i).runs)
     run_confounds = bids.util.tsvread(tboldconf{j});
     for cn = 1:length(conf_names)
-        QC(i).(conf_names{cn}) = [QC(i).(conf_names{cn}); run_confounds.(conf_names{cn})];
+        temprun_confounds=demean_detrend(run_confounds.(conf_names{cn})');
+        
+        QC(i).(conf_names{cn}) = [QC(i).(conf_names{cn}); temprun_confounds'];
     end
 end
 
