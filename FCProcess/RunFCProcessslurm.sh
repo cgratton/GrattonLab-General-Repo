@@ -2,9 +2,9 @@
 #SBATCH -A b1081
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -t 4:00:00 
+#SBATCH -t 15:00:00 
 #SBATCH -p b1081
-#SBATCH --mem=60
+#SBATCH --mem=0G
 #SBATCH --job-name="FCTest_BMAPD"
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=briankraus2024@u.northwestern.edu
