@@ -1,3 +1,10 @@
+CG - 5/2020, started on Surface Pipeline at NU
+
+Started from using examples from MSC code & Evan Processing scripts
+
+
+
+MY PREVIOUS NOTES:
 1. Do regular FC processing, but without smoothing the data in the last step
      see - TaskRest data analysis steps (Joe's data)
 
