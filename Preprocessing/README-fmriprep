@@ -1,0 +1,40 @@
+%%% README - how to run fmriprep for lab preprocessing on Quest
+% Edited: 02/11/2020 by CG
+% Edited to version 20.0.1 on 03/31/2020 by CG
+% Edited to version 20.0.6 on 05/01/2020 by CG (thanks to steps by MD)
+
+Steps:
+1. Make sure you have singularity on Quest in version you want (should only need to be done occasionally)
+    > module load singularity
+    > singularity build /projects/b1081/singularity_images/fmriprep-$VERSION.simg docker://poldracklab/fmriprep:$VERSION
+    (if this doesn't work, you may need to add some files to your bashrc path. Talk to Caterina)
+
+2. Get data onto quest: use globus to do this most efficiently
+
+3. If you want to reuse a previous freesfurfer run, make sure that run is linked into the top level freesurfer directory (/projects/b1081/iNetworks/Nifti/derivatives/freesurfer-6.0.1)
+
+4. Start singularity in a terminal on quest
+   > module load singularity
+
+5. Run fmriprep through lab command.
+   > sbatch fmriprep_batch_script_20.0.6.sh
+Before starting, edit the sbatch commands as needed (remember email!) and also the inputs that are being given (i.e., subject ID, freesurfer path, working directory path, etc.)
+This takes ~1 day with the current settings on an iNetworks subject. Monitor progress through slurm output files and by looking at qstat list.
+
+If freesurfer has not been run expect this will take ~1.5 days
+
+If you want any other version, check the following documentation and edit fmriprep command as needed:
+https://fmriprep.readthedocs.io/en/stable/
+
+6. Once done, check that fmriprep completed successfully:
+- check html output for errors
+- check that output files have been saved in derivatives directory
+- look through html file for QC (see list)
+
+7a. If all looks good, transfer data back using globus
+
+
+7b. If something didn't work, troubleshoot through output file and error in html file:
+- is a path wrong or missing?
+- is the data inaccessible in some way?
+- if not obvious, try rerunning fmriprep command with same working directory to see if it will move further (occasionally works, but suspect. Note this occurrence)
