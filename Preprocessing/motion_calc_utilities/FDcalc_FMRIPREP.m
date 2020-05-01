@@ -18,7 +18,7 @@ function FDcalc_FMRIPREP(topdir,preprocType,subject,sessions,varargin)
 
     
 %%% Directory structure
-projectdir = [topdir 'preproc_' preprocType '/fmriprep/sub-' subject '/'];
+projectdir = [topdir '/preproc_' preprocType '/fmriprep/sub-' subject '/'];
 input_filestr = 'confounds_regressors.tsv'; %search for all files for all runs
 
 %%% FD/filtering parameters (these will probably be constant within a study but potentially vary across studies)
@@ -34,7 +34,7 @@ FDthresh = 0.2;
 fFDthresh = 0.1;
 run_min = 50; % minimum number of frames in a run
 tot_min = 150; % minimum number of frames needed across all runs
-else
+elseif nargin > 4
     % assume varargin{1} = structure with each of the following fields
     TR = varargin{1}.TR;
     contig_frames = varargin{1}.contig_frames;
@@ -45,6 +45,8 @@ else
     fFDthresh = varargin{1}.fFDthresh;
     run_min = varargin{1}.run_min;
     tot_min = varargin{1}.tot_min;
+else
+    error('incorrect number of inputs');
 end
 
     

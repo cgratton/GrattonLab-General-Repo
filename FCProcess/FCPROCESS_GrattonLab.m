@@ -45,7 +45,7 @@ function FCPROCESS_GrattonLab(datafile,outputDir,varargin)
 %% IMPORTANT VARIABLES
 tmasktype = 'regular'; %'ones' or something else (ones = take everything except short periods at the start of each scan
 space = 'MNI152NLin6Asym';
-res = ''; %'','res-2' or 'res-3' (voxel resolutions for output)
+res = 'res-2'; %'','res-2' or 'res-3' (voxel resolutions for output)
 %switches.WMero=4; % default erosion for freesurfer WM mask. Check before this that this looks good
 %switches.CSFero=1; % default erosion for freesurfer CSF mask. Check before this that this looks good.
 GMthresh = 0.5; %these and following should only really matter for grayplot
@@ -89,9 +89,9 @@ for i = 1:numdatas
         conf_fstring1 = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',QC(i).topDir,QC(i).confoundsFolder,QC(i).subjectID,QC(i).session);
         all_fstring2 = sprintf('sub-%s_ses-%d_task-%s_run-%02d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(r));
         
-        bolddata_fname = [data_fstring1 all_fstring2 '_space-' space res '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
-        boldavg_fname = [conf_fstring1 all_fstring2 '_space-' space res '_boldref.nii.gz']; %referent for alignment
-        boldmask_fname = [conf_fstring1 all_fstring2 '_space-' space res '_desc-brain_mask.nii.gz']; %fmriprep mask
+        bolddata_fname = [data_fstring1 all_fstring2 '_space-' space '_' res '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
+        boldavg_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_boldref.nii.gz']; %referent for alignment
+        boldmask_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_desc-brain_mask.nii.gz']; %fmriprep mask
         confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_regressors.tsv'];
         tmask_fname = [conf_fstring1 'FD_outputs/' all_fstring2 '_desc-tmask_' QC(i).FDtype '.txt']; %assume this is in confounds folder
         
@@ -136,7 +136,7 @@ for i = 1:numdatas
     end
     
     % there is only one anatomy target across all runs and sessions
-    mpr_fname = sprintf('%s/%s/fmriprep/sub-%s/anat/sub-%s_space-%s%s_desc-preproc_T1w.nii.gz',QC(i).topDir,QC(i).dataFolder,QC(i).subjectID,QC(i).subjectID,space,res);
+    mpr_fname = sprintf('%s/%s/fmriprep/sub-%s/anat/sub-%s_space-%s_desc-preproc_T1w.nii.gz',QC(i).topDir,QC(i).dataFolder,QC(i).subjectID,QC(i).subjectID,space);
     mprnii{i,1} = mpr_fname;
     
     if ~exist(mpr_fname)
@@ -275,9 +275,9 @@ for i=1:numdatas
         all_fstring = sprintf('sub-%s_ses-%d_task-%s_run-%02d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(j));
         QC(i).naming_str{j} = all_fstring; % keep a record of this string
         
-        tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_desc-preproc_bold.nii.gz'];
-        tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_boldref.nii.gz'];
-        tboldmasknii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space res '_desc-brain_mask.nii.gz'];
+        tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_desc-preproc_bold.nii.gz'];
+        tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_boldref.nii.gz'];
+        tboldmasknii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_desc-brain_mask.nii.gz'];
         tboldconf{i,j} = [QC(i).sessdir_out all_fstring '_desc-confounds_regressors.tsv'];
         tboldmot_folder{i,j} = [QC(i).sessdir_out 'FD_outputs'];
 
@@ -631,7 +631,6 @@ for i=1:numdatas %f=1:numdatas
     end
     %LASTCONC{stage}=[LASTCONC{stage-1} '_' ending];
     
-    %CG - STOPPED HERE
     
     if switches.doregression
         

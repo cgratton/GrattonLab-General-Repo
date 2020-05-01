@@ -1,6 +1,0 @@
-sub	sess	task	TR	dropFr	topDir	dataFolder	confoundsFolder	FDtype	runs
-INET003	1	rest	 1.1	5	/projects/b1081/iNetworks/Nifti/derivatives	preproc_fmriprep-1.5.8_MOD5	preproc_fmriprep-1.5.8_MOD5 fFD 1,2,3,4,5,6,7
-INET003	2	rest	 1.1	5	/projects/b1081/iNetworks/Nifti/derivatives	preproc_fmriprep-1.5.8_MOD5	preproc_fmriprep-1.5.8_MOD5 fFD 1,2,3,4,5,6,7
-INET003	3	rest	 1.1	5	/projects/b1081/iNetworks/Nifti/derivatives	preproc_fmriprep-1.5.8_MOD5	preproc_fmriprep-1.5.8_MOD5 fFD 1,2,3,4,5,6,7,8,9
-INET003	4	rest	 1.1	5	/projects/b1081/iNetworks/Nifti/derivatives	preproc_fmriprep-1.5.8_MOD5	preproc_fmriprep-1.5.8_MOD5 fFD 1,2,3,4,5,6,7,8
-
