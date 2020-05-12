@@ -1,5 +1,6 @@
 function PostFreeSurferPipeline_fsavg2fslr_long_GrattonLab(subject,FreesurferImportLocation,MPRImportLocation)
-% 
+% PostFreeSurferPipeline_fsavg2fslr_long_GrattonLab('INET003','/projects/b1081/iNetworks/Nifti/derivatives/freesurfer-6.0.1/','/projects/b1081/iNetworks/Nifti/derivatives/preproc_fmriprep/fmriprep/sub-INET003/anat/')
+%
 % CG, 5/2020 - editing function originally made by E. Gordon for Petersen lab to
 % work at NU.
 %  Assuming BIDS organizational structure
@@ -54,7 +55,7 @@ AtlasTransform=[outputFolder '/sub-' subject '/' InputAtlasName '/zero'];
 InverseAtlasTransform=[outputFolder '/sub-' subject '/' InputAtlasName '/zero'];
 AtlasSpaceT1wImage = T1name; %[subject '_mpr_n1_111_t88']; %CG - again, not totally sure why these all end up being the same
 AtlasSpaceT2wImage = T1name; %[subject '_mpr_n1_111_t88'];
-T1wImageBrainMask='brainmask_fs' %Name of FreeSurfer-based brain mask -- I think this gets created? GW
+T1wImageBrainMask = 'brainmask_fs'; %Name of FreeSurfer-based brain mask -- I think this gets created? GW
 
 %Making directories and copying over relevant data (freesurfer output and mpr):
 system(['mkdir -p ' outputFolder '/sub-' subject '/' InputAtlasName]);
@@ -62,12 +63,12 @@ system(['cp -R ' FreesurferImportLocation '/sub-' subject ' ' outputFolder '/sub
 system(['cp ' MPRImportLocation T1name '.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/' T1name '.nii.gz']);
 
 %I think this stuff below is making the 'fake warpfield that is identity above? GW
-system(['fslmaths ' outputFolder '/sub-' subject '/' InputAtlasName '/' T1name '.nii.gz -sub ' outputFolder '/sub-' subject '/' InputAtlasName '/' T1name '.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz']);
-system(['fslmerge -t ' outputFolder '/sub-' subject '/' InputAtlasName '/zero_.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz']);
+system(['module load fsl/5.0.8; fslmaths ' outputFolder '/sub-' subject '/' InputAtlasName '/' T1name '.nii.gz -sub ' outputFolder '/sub-' subject '/' InputAtlasName '/' T1name '.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz']);
+system(['module load fsl/5.0.8; fslmerge -t ' outputFolder '/sub-' subject '/' InputAtlasName '/zero_.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz']);
 system(['mv -f ' outputFolder '/sub-' subject '/' InputAtlasName '/zero_.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz']);
 
 % Run it
-system([CiftiScripts '/FreeSurfer2CaretConvertAndRegisterNonlinear.sh ' outputFolder ' sub-' subject ' ' T1wFolder ' ' AtlasSpaceFolder ' ' NativeFolder ' ' FreeSurferFolder ' ' FreeSurferInput ' ' FinalTemplateSpace ' ' T1wRestoreImage ' ' T2wRestoreImage ' ' CaretAtlasFolder ' ' DownSampleI ' ' DownSampleNameI ' ' Caret5_Command ' ' Caret7_Command ' ' AtlasTransform ' ' InverseAtlasTransform ' ' AtlasSpaceT1wImage ' ' AtlasSpaceT2wImage ' ' T1wImageBrainMask ' ' PipelineScripts ' ' GlobalScripts]);
+system(['./FreeSurfer2CaretConvertAndRegisterNonlinear_GrattonLab.sh ' outputFolder ' sub-' subject ' ' T1wFolder ' ' AtlasSpaceFolder ' ' NativeFolder ' ' FreeSurferFolder ' ' FreeSurferInput ' ' FinalTemplateSpace ' ' T1wRestoreImage ' ' T2wRestoreImage ' ' CaretAtlasFolder ' ' DownSampleI ' ' DownSampleNameI ' ' Caret5_Command ' ' Caret7_Command ' ' AtlasTransform ' ' InverseAtlasTransform ' ' AtlasSpaceT1wImage ' ' AtlasSpaceT2wImage ' ' T1wImageBrainMask ' ' PipelineScripts ' ' GlobalScripts]);
 
 
 % Note: Evan's version has some additional steps to resample data from
