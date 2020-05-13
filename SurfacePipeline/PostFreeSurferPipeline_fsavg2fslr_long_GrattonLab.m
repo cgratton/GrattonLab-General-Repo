@@ -68,7 +68,7 @@ system(['module load fsl/5.0.8; fslmerge -t ' outputFolder '/sub-' subject '/' I
 system(['mv -f ' outputFolder '/sub-' subject '/' InputAtlasName '/zero_.nii.gz ' outputFolder '/sub-' subject '/' InputAtlasName '/zero.nii.gz']);
 
 % Run it
-system(['./FreeSurfer2CaretConvertAndRegisterNonlinear_GrattonLab.sh ' outputFolder ' sub-' subject ' ' T1wFolder ' ' AtlasSpaceFolder ' ' NativeFolder ' ' FreeSurferFolder ' ' FreeSurferInput ' ' FinalTemplateSpace ' ' T1wRestoreImage ' ' T2wRestoreImage ' ' CaretAtlasFolder ' ' DownSampleI ' ' DownSampleNameI ' ' Caret5_Command ' ' Caret7_Command ' ' AtlasTransform ' ' InverseAtlasTransform ' ' AtlasSpaceT1wImage ' ' AtlasSpaceT2wImage ' ' T1wImageBrainMask ' ' PipelineScripts ' ' GlobalScripts]);
+system(['./FreeSurfer2CaretConvertAndRegisterNonlinear_GrattonLab.sh ' outputFolder ' sub-' subject ' ' T1wFolder ' ' AtlasSpaceFolder ' ' NativeFolder ' ' FreeSurferFolder ' ' FreeSurferInput ' ' FinalTemplateSpace ' ' T1wRestoreImage ' ' T2wRestoreImage ' ' CaretAtlasFolder ' ' DownSampleI ' ' DownSampleNameI ' ' Caret5_Command ' ' Caret7_Command ' ' AtlasTransform ' ' InverseAtlasTransform ' ' AtlasSpaceT1wImage ' ' AtlasSpaceT2wImage ' ' T1wImageBrainMask ' ' PipelineScripts ' ' GlobalScripts ' ' CiftiScripts]);
 
 
 % Note: Evan's version has some additional steps to resample data from
