@@ -1,9 +1,29 @@
-CG - 5/2020, started on Surface Pipeline at NU
+CG - 5/2020, Surface Pipeline at NU
 
 Started from using examples from MSC code & Evan Processing scripts
 
 
 
+1. If not already created, you will need to make the fs_LR_32k (HCP-style) surfaces for each subject. This only needs to be done ONCE per subject. To do this:
+    a. Run Freesurfer on the data (usually done through fmriprep - see notes in that folder)
+    b. Run PostFreeSurferPipeline_fsavg2fslr_long_GrattonLab.m on the subject (see header of that function)
+        ex: PostFreeSurferPipeline_fsavg2fslr_long_GrattonLab('INET003','/projects/b1081/iNetworks/Nifti/derivatives/freesurfer-6.0.1/','/projects/b1081/iNetworks/Nifti/derivatives/preproc_fmriprep/fmriprep/sub-INET003/anat/');
+        NOTE-A: You will need to have scripts in the /projects/b1081/Scripts/CIFTI_RELATED/ folder accessible
+        NOTE-B: You will need to be able to use functions from FSL and Freesurfer. On Quest, these are loaded through modules in the function, BUT you will also have to modify your .bashrc to properly direct some of these scripts (only needs to be done once; see cgv5453 .bashrc for example).
+    c. Check the output. It should be found in, e.g.:
+        /projects/b1081/iNetworks/Nifti/derivatives/freesurfer-6.0.1/FREESURFER_fs_LR/sub-INET003
+
+XXXX CHECK FOR ?? XX
+
+XXXX Run Goodvoxels script. Create medial wall masks? XXX
+
+2. Run surface transformation on your processed fMRI data to put it on the surface 
+
+
+
+
+
+========
 MY PREVIOUS NOTES:
 1. Do regular FC processing, but without smoothing the data in the last step
      see - TaskRest data analysis steps (Joe's data)
