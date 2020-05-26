@@ -27,12 +27,12 @@ outfolder = '/projects/b1081/iNetworks/Nifti/derivatives/postFCproc_CIFTI/';
 %Location of the volumetric subcortical mask label file. Data within this
 %mask will be smoothed and included in the cifti files. This should contain
 %different labels for each volumetric structure identified by freesurfer.
-subcort_mask = '/projects/b1081/Scripts/CIFTI_RELATED/Resources/cifti_masks/subcortical_mask_LR_222_MNI.nii';
+subcort_mask = '/projects/b1081/Scripts/CIFTI_RELATED/Resources/cifti_masks/subcortical_mask_LR_222_MNI.nii.gz';
 
 %Location of subjects' fs_LR-registered surfaces. Underneath this folder,
 %subject data should be in '[subjectnumber]/7112b_fs_LR/' ; this folder
 %should contain 'Native' and 'fsaverage_LR32k' subfolders with surfaces.
-fs_LR_surfdir = '/projects/b1081/iNetworks/derivatives/freesurfer-6.0.1/FREESURFER_fs_LR/';
+fs_LR_surfdir = '/projects/b1081/iNetworks/Nifti/derivatives/freesurfer-6.0.1/FREESURFER_fs_LR/';
 
 %Location of atlas medial wall masks (where the cortical surfaces don't
 %have cortical data). Data from these regions will not be included in the
@@ -55,9 +55,12 @@ sw_medial_mask_R = []; %'/data/pruett/CPD/ImagingStudies/BabySibs_fcMRI//Zeran/v
 smoothnum = 2.55;
 
 
-%some FC proc variables:
+%CG added: some FC proc variables:
 space = 'MNI152NLin6Asym';
+space_short = 'MNI152';
 res = 'res-2'; %'','res-2' or 'res-3' (voxel resolutions for output)
+res_short = '222';
+T1name_end = ['_space-' space '_desc-preproc_T1w.nii.gz']; % T1 name ending
 
 
 
