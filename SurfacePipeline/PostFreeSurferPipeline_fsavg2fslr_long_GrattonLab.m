@@ -108,12 +108,9 @@ world_deform_matrix = [transform_dir transform_file '_fnirt_to_world.nii.gz']; %
 world_affine_matrix = [transform_dir transform_file '_flirt_to_world.txt']; %if using affine version
 
 
-% CG - if we change to warpfield, will need to change this function
-% THIS doesn't seem to work, because warpfield is in MNI bounding space,
-% not original T1 space. Don't know why/how this is?
-%system([Caret7_Command ' -convert-warpfield -from-fnirt ' transform_matrix '_fullreg_fnirt.nii.gz ' InputT1Vol '.nii.gz -to-world ' world_matrix]);
-% instead trying affine (which is similar, although differences exist
-% locally of course)
+% ROUND ABOUT STRATEGY based on testing that * seems * to work
+% use flirt inv converted file for doing an affine transform
+% from there, apply itk warpfield based on disassembly
 system([Caret7_Command ' -convert-affine -from-flirt ' transform_matrix '_affine_inv_flirt.txt ' InputT1Vol '.nii.gz ' FinalT1Vol ' -to-world ' world_affine_matrix]);
 %system([Caret7_Command ' -convert-affine -from-itk ' transform_dir transform_file '_affine_world.txt -to-world ' world_affine_matrix]);
 system([Caret7_Command ' -convert-warpfield -from-itk ' transform_dir '01_' transform_file '_DisplacementFieldTransform.nii.gz -to-world ' world_deform_matrix]);
@@ -219,18 +216,20 @@ system([c3d_dir 'c3d_affine_tool -itk 00_' transform_file '_AffineTransform.mat 
 system([wb_dir 'wb_command -convert-affine -from-world ' transform_file '_affine_world.txt -to-flirt ' transform_file '_affine_flirt.txt ' Atlasvol ' ' T1_Input '.nii.gz']);
 system(['module load fsl/5.0.11; convert_xfm -inverse ' transform_file '_affine_flirt.txt -omat ' transform_file '_affine_inv_flirt.txt']); %this needed to be 5.0.11 or the inverse gets messed up (only from matlab, not command line, maybe a mem issue?)
 
+
+%% DON'T NEED THIS IF I USE THE NEW STRATEGY - fsl inv for affine, itk warp for warp
 %apply X and Y flips to warpfields
 %first negate all of them, then take the frames I need
-system([wb_dir 'wb_command -volume-math ''-x'' ' transform_file '_warponly_negative.nii.gz -var x 01_' transform_file '_DisplacementFieldTransform.nii.gz']);
+%system([wb_dir 'wb_command -volume-math ''-x'' ' transform_file '_warponly_negative.nii.gz -var x 01_' transform_file '_DisplacementFieldTransform.nii.gz']);
 
-system([wb_dir 'wb_command -volume-merge ' transform_file '_warponly_world.nii.gz -volume ' transform_file '_warponly_negative.nii.gz -subvolume 1 -up-to 2 ',...
-    '-volume 01_' transform_file '_DisplacementFieldTransform.nii.gz -subvolume 3']);
+%system([wb_dir 'wb_command -volume-merge ' transform_file '_warponly_world.nii.gz -volume ' transform_file '_warponly_negative.nii.gz -subvolume 1 -up-to 2 ',...
+%    '-volume 01_' transform_file '_DisplacementFieldTransform.nii.gz -subvolume 3']);
 
 %affine already takes it into MNI space, so use MNI as ref for both sides of warp
-system([wb_dir 'wb_command -convert-warpfield -from-world ' transform_file '_warponly_world.nii.gz -to-fnirt ' transform_file '_warponly_fnirt.nii.gz ' Atlasvol]);
+%system([wb_dir 'wb_command -convert-warpfield -from-world ' transform_file '_warponly_world.nii.gz -to-fnirt ' transform_file '_warponly_fnirt.nii.gz ' Atlasvol]);
 
 %compose
-system(['module load fsl/5.0.8; convertwarp -r ' Atlasvol ' --premat=' transform_file '_affine_inv_flirt.txt --warp1=' transform_file '_warponly_fnirt.nii.gz -o ' transform_file '_fullreg_fnirt.nii.gz --rel']);
+%system(['module load fsl/5.0.8; convertwarp -r ' Atlasvol ' --premat=' transform_file '_affine_inv_flirt.txt --warp1=' transform_file '_warponly_fnirt.nii.gz -o ' transform_file '_fullreg_fnirt.nii.gz --rel']);
 
 %resample to sanity check
 % applywarp \
@@ -238,7 +237,7 @@ system(['module load fsl/5.0.8; convertwarp -r ' Atlasvol ' --premat=' transform
 %     --in="$insubjdir"/T1w/T1w_acpc_dc_restore.nii.gz \
 %     --warp="$subjdir"/ants_fullreg_fnirt.nii.gz \
 %     --out="$subjdir"/ants_reg_fnirt_resamp.nii.gz
-
+%%
 
 cd(cwd);
 
