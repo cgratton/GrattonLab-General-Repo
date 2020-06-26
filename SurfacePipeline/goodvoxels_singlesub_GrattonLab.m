@@ -7,7 +7,8 @@ factor = .5;
 
 ribbonname = [surfdir '/Ribbon/ribbon_222.nii.gz']; %changed from 333 to 222
 if ~exist(ribbonname) || force_ribbon
-    system(['csh create_ribbon_singlesub_GrattonLab.csh ' subject ' ' surfdir ' ' T1name ' 2']); %changed 3 to 2 for resolution
+    %system(['csh create_ribbon_singlesub_GrattonLab.csh ' subject ' ' surfdir ' ' T1name ' 2']); %changed 3 to 2 for resolution
+    create_ribbon_singlesub_GrattonLab(subject,surfdir,T1name,'2',funcvol); 
 else
     disp('>>> WARNING: making goodvoxels out of previously saved ribbon. If not desired, set to force');
 end

@@ -28,7 +28,6 @@ function post_fc_processing_batch_GrattonLab(post_fc_processing_batch_params_fil
 % CG 05/2020 - edit to work at NU
 
 
-
 %Find params file
 [paramspath,paramsname,paramsextension] = fileparts(post_fc_processing_batch_params_file);
 origpath = pwd;
@@ -71,7 +70,7 @@ if do_smallwall
     mkdir(ciftiswdir);
 end
 
-workbenchdir = '/projects/b1081/Scripts/workbench2/exe_rh_linux64/';
+workbenchdir = '/projects/b1081/Scripts/workbench2/bin_linux64/';
 Caret5_Command = '/projects/b1081/Scripts/caret/bin_linux64/';
 HEMS = {'L';'R'};
 
@@ -118,6 +117,9 @@ goodvox_fnames = goodvoxels_wrapper(dataInfo,tmask_names,preprocdata_names,surff
     T1name_end,space_short,force_remake_concat,force_ribbon,force_goodvoxels);
 
 for s = 1:length(dataInfo.sub)
+    
+    tic;
+    
     subject = dataInfo.sub{s};  %each line can designate diff sub and sess together so don't need separate loops
     session = num2str(dataInfo.sess(s));
     TR = dataInfo.TR(s,1);
@@ -158,6 +160,7 @@ for s = 1:length(dataInfo.sub)
             outsphere = [fs_LR_surfdir '/sub-' subject '/' space_short '/fsaverage_LR32k/sub-' subject '.' HEMS{hem} '.sphere.32k_fs_LR.surf.gii'];
             surfname = [allstart_runs_fstring2{s,r} '_' HEMS{hem}];
             
+            %%%% FOR TESTING
             disp(['Hemisphere: ' HEMS{hem}]);
             disp('...mapping data to surface');
             system([workbenchdir '/wb_command -volume-to-surface-mapping ' funcvol_run '.nii.gz ' midsurf ' ' surffuncdir '/' surfname '.func.gii -ribbon-constrained ' whitesurf ' ' pialsurf ' -volume-roi ' submask]);
@@ -179,20 +182,14 @@ for s = 1:length(dataInfo.sub)
             delete([surffuncdir '/' surfname '_dil10.func.gii']);
             delete([surffuncdir '/' surfname '_dil10_32k_fs_LR.func.gii']);
         end
+
         
         disp('done with hemispheres');
         
         % Smooth data in volume within mask
         disp('... smothing functional data in volume');        
-        funcvol_run_ROIsmooth = [funcvol_run '_wROI255'];
-        1/0
-        %%%%%%% CG: Stopped here. Subcortical mask is not same dimensions
-        %%%%%%% as our data (both in 222, but one is bigger in extent).
-        %%%%%%% Need to  make a new version that matches, maybe based on
-        %%%%%%% our freesurfer run
-        %%%%%%%        
+        funcvol_run_ROIsmooth = [funcvol_run '_wROI255'];       
         system([workbenchdir '/wb_command -volume-smoothing ' funcvol_run '.nii.gz ' num2str(smoothnum) ' ' funcvol_run_ROIsmooth '.nii.gz -roi ' subcort_mask]);
-        
         delete([funcvol_run '.nii.gz'])
         %delete([funcvol_run '_unprocessed.nii.gz']) - this is associated
         %with goodvoxels wrapper. Delete there? It takes a long time to
@@ -213,6 +210,8 @@ for s = 1:length(dataInfo.sub)
         
         
     end
+    
+    toc;
     
 end
 
