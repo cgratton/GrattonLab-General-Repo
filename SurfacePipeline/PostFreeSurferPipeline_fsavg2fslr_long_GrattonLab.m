@@ -13,7 +13,7 @@ function PostFreeSurferPipeline_fsavg2fslr_long_GrattonLab(subject,FreesurferImp
 % systemresult: summary of system calls
 % makes a bunch of files and adds them to the freesurfer folder
 %
-% Should take ~10 min.
+% Should take ~10-15 min.
 
 tic;
 
@@ -97,9 +97,7 @@ switch InputVolName
     case 'NativeVol'
         transform_dir = preproc_T1_folder;
         transform_file = ['sub-' subject '_from-T1w_to-' ResampleAtlasName_long '_mode-image_xfm'];
-        %if 0 % FOR TESTING
         prep_ANTS_transform_to_FSL_all(transform_dir,transform_file,InputT1Vol,FinalT1Vol);
-        %end
         transform_matrix = [transform_dir transform_file];
     otherwise
         error('Not implemented yet for this Input Atlas. Check and edit code');
@@ -119,10 +117,11 @@ system([Caret7_Command ' -convert-warpfield -from-itk ' transform_dir '01_' tran
 %%% STOPPED HERE
 
 
-surfaces = {'midthickness', 'white', 'pial', 'inflated', 'very_inflated'};
+surfaces = {'midthickness', 'white', 'pial', 'inflated', 'very_inflated'}; %CG - inflated and very inflated don't work with applying the transforms; regenerate afterward too
 
 spaces = {'./','Native','fsaverage_LR32k'}; % = surface spaces (not vol)
 extensions_per_space = {'164k_fs_LR','native','32k_fs_LR'};
+scale_num = {'2.5','0.75','0.75'};
 
 cwd = pwd;
 
@@ -147,14 +146,27 @@ for i = 1:length(spaces)
         %system([Caret7_Command ' -surface-apply-affine ' thisResampleFolder '/' subject '.L.' surface '.' thisextension '.surf.gii ' world_matrix ' ' thisResampleFolder '/' subject '.L.' surface '.' thisextension '.surf.gii']);
         %system(['set matrix = `cat ' transform_matrix '`; ' Caret5_Command ' -surface-apply-transformation-matrix ' thisResampleFolder '/' subject '.L.' surface '.' thisextension '.coord.gii ' thisResampleFolder '/' subject '.L.' thisextension '.topo.gii ' thisResampleFolder '/' subject '.L.' surface '.' thisextension '.coord.gii -matrix $matrix']);
         system([Caret7_Command ' -surface-apply-affine ' thisResampleFolder '/sub-' subject '.L.' surface '.' thisextension '.surf.gii ' world_affine_matrix ' ' thisResampleFolder '/sub-' subject '.L.' surface '.' thisextension '.surf.gii']);
-        system([Caret7_Command ' -surface-apply-warpfield ' thisResampleFolder '/sub-' subject '.L.' surface '.' thisextension '.surf.gii ' world_deform_matrix ' ' thisResampleFolder '/sub-' subject '.L.' surface '.' thisextension '.surf.gii']);
+        if j < 4 %doesn't work for inflated/very inflated - regenerated at end with xfm ending 
+           system([Caret7_Command ' -surface-apply-warpfield ' thisResampleFolder '/sub-' subject '.L.' surface '.' thisextension '.surf.gii ' world_deform_matrix ' ' thisResampleFolder '/sub-' subject '.L.' surface '.' thisextension '.surf.gii']);
+        end
         
         %system([Caret7_Command ' -surface-apply-affine ' thisResampleFolder '/' subject '.R.' surface '.' thisextension '.surf.gii ' world_matrix ' ' thisResampleFolder '/' subject '.R.' surface '.' thisextension '.surf.gii']);
         %system(['set matrix = `cat ' transform_matrix '`; ' Caret5_Command ' -surface-apply-transformation-matrix ' thisResampleFolder '/' subject '.R.' surface '.' thisextension '.coord.gii ' thisResampleFolder '/' subject '.R.' thisextension '.topo.gii ' thisResampleFolder '/' subject '.R.' surface '.' thisextension '.coord.gii -matrix $matrix']);
         system([Caret7_Command ' -surface-apply-affine ' thisResampleFolder '/sub-' subject '.R.' surface '.' thisextension '.surf.gii ' world_affine_matrix ' ' thisResampleFolder '/sub-' subject '.R.' surface '.' thisextension '.surf.gii']);
-        system([Caret7_Command ' -surface-apply-warpfield ' thisResampleFolder '/sub-' subject '.R.' surface '.' thisextension '.surf.gii ' world_deform_matrix ' ' thisResampleFolder '/sub-' subject '.R.' surface '.' thisextension '.surf.gii']);
-        
+        if j < 4 % see note above
+            system([Caret7_Command ' -surface-apply-warpfield ' thisResampleFolder '/sub-' subject '.R.' surface '.' thisextension '.surf.gii ' world_deform_matrix ' ' thisResampleFolder '/sub-' subject '.R.' surface '.' thisextension '.surf.gii']);
+        end    
     end
+    
+    % CG added: re-generated inflated and very inflated surfaces so both
+    % transforms applied
+    system([Caret7_Command ' -surface-generate-inflated -iterations-scale ' scale_num{i} ' ' thisResampleFolder '/sub-' subject '.L.midthickness.' thisextension '.surf.gii ' thisResampleFolder '/sub-' subject '.L.inflated.' thisextension '_xfm.surf.gii ' thisResampleFolder '/sub-' subject '.L.veryinflated.' thisextension '_xfm.surf.gii']);
+    system([Caret7_Command ' -add-to-spec-file ' thisResampleFolder '/sub-' subject '.' thisextension '.wb.spec INVALID ' thisResampleFolder '/sub-' subject '.L.inflated.' thisextension '_xfm.surf.gii']);
+    system([Caret7_Command ' -add-to-spec-file ' thisResampleFolder '/sub-' subject '.' thisextension '.wb.spec INVALID ' thisResampleFolder '/sub-' subject '.L.veryinflated.' thisextension '_xfm.surf.gii']);
+    
+    system([Caret7_Command ' -surface-generate-inflated -iterations-scale ' scale_num{i} ' ' thisResampleFolder '/sub-' subject '.R.midthickness.' thisextension '.surf.gii ' thisResampleFolder '/sub-' subject '.R.inflated.' thisextension '_xfm.surf.gii ' thisResampleFolder '/sub-' subject '.R.veryinflated.' thisextension '_xfm.surf.gii']);
+    system([Caret7_Command ' -add-to-spec-file ' thisResampleFolder '/sub-' subject '.' thisextension '.wb.spec INVALID ' thisResampleFolder '/sub-' subject '.R.inflated.' thisextension '_xfm.surf.gii']);
+    system([Caret7_Command ' -add-to-spec-file ' thisResampleFolder '/sub-' subject '.' thisextension '.wb.spec INVALID ' thisResampleFolder '/sub-' subject '.R.veryinflated.' thisextension '_xfm.surf.gii']);
     
 end
 
