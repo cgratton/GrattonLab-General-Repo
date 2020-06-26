@@ -25,7 +25,7 @@ Started from using examples from MSC code & Evan Processing scripts
    > post_fc_processing_batch_Grattonlab('post_fc_processing_batch_iNetworks.m')
    
 	NOTE-A: Currently, the code is set up to look and see whether a few steps (tmasked files for goodvoxels, goodvoxels files, and surface ribbon) have already been run and if so, will not rerun them. If you DO want them to be rerun, you can edit the code to set to "force" or delete the files from their relevant directories.
-	NOTE-B: This takes a long time (XX min. per session). We may want to edit to set up a parallelization of this script.
+	NOTE-B: This takes a long time (2 hrs. per session for rest, 20 min. per 5.5 min. run). We may want to edit to set up a parallelization of this script.
 	NOTE-C: This code automatically applies surface smoothing (and volume smoothing for the subcortex). It will need to be edited and rerun if we do not want those pieces. The code is also set up to assume 222 space.
 
    c. Check the output CIFTI files: load these in workbench and check that they look reasonable with reasonable fluctuations. If this is the first subject you are testing, it is probably also a good idea to make a dconn and test that the correlation structure seems reasonable.
