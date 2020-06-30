@@ -1,0 +1,1 @@
+addpath(genpath('/projects/b1081/Scripts/')); %this might be too general
