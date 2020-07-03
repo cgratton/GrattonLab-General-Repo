@@ -48,10 +48,11 @@ for i = 1:numdatas
     sess_roi_timeseries_concat = [];
     tmask_concat = [];
     
-    outDir = [outDir_top '/sub-' subInfo(i).subjectID '/sess-' num2str(subInfo(i).session)];
-    if ~exist(outDir) 
-        mkdir(outDir);
-    end
+    outDir = outDir_top; % no real reason to keep BIDS - too spread out
+    %outDir = [outDir_top '/sub-' subInfo(i).subjectID '/sess-' num2str(subInfo(i).session)];
+    %if ~exist(outDir) 
+    %    mkdir(outDir);
+    %end
     
     for j = 1:length(subInfo(i).runs)
         
