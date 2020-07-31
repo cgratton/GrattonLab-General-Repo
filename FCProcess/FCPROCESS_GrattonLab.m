@@ -22,8 +22,10 @@ function FCPROCESS_GrattonLab(datafile,outputDir,varargin)
 % change code to use 'ones' = just skip frames at the start of each run,
 % but don't do scrubbing
 %
-% unlike Petersen lab version, nuisance regressors are taken from fmriprep
-% output directly, rather than a freesurfer processing folder
+% nuisance regressor toggle: 'fmriprep' or 'recalc'
+% fmriprep: nuisance regressors are taken from fmriprep output
+% recalc: recalculate nuisance regressors in the script (default since
+% we've had intermittent issues with fmriprep global signal regressor)
 %
 % The processing order is:
 %    demean/detrend (mask)
@@ -92,7 +94,7 @@ for i = 1:numdatas
         bolddata_fname = [data_fstring1 all_fstring2 '_space-' space '_' res '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
         boldavg_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_boldref.nii.gz']; %referent for alignment
         boldmask_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_desc-brain_mask.nii.gz']; %fmriprep mask
-        confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_regressors.tsv'];
+        confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_regressors.tsv']; %if using the fmriprep regressor
         tmask_fname = [conf_fstring1 'FD_outputs/' all_fstring2 '_desc-tmask_' QC(i).FDtype '.txt']; %assume this is in confounds folder
         
         %boldmat{i,j} = []; %cell2mat(strcat(df.filepath{i,1},'/motion_params/',QC(i).vcnum,'_b',task,QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat')); - EDIT
@@ -151,6 +153,7 @@ if length(varargin) > 0
         case 'defaults2'
             switches.doregression=1;
             switches.regressiontype=1;
+            switches.regress_source='calc'; %'calc' (recalc here) or 'fmriprep' (take from fmriprep output
             switches.motionestimates=2;
             switches.WM=1;
             switches.V=1;
@@ -195,6 +198,7 @@ end
 fprintf('\n\n\n\n*** HERE ARE YOUR SETTINGS ***:\n')
 fprintf('switches.doregression (1=yes;0=no): %d\n',switches.doregression);
 fprintf('switches.regressiontype (1=freesurfer): %d\n',switches.regressiontype);
+fprintf('switches.regress_source : %s\n',switches.regress_source);
 fprintf('switches.motionestimates (0=no; 1=R,R`; 2=FRISTON; 20=R,R`,12rand): %d\n',switches.motionestimates);
 fprintf('switches.WM (1=regress;0=no): %d\n',switches.WM);
 fprintf('switches.V (1=regress;0=no): %d\n',switches.V);
@@ -255,8 +259,6 @@ for i=1:numdatas
     %tmp = load_untouch_nii_wrapper(tmprnii{i,1});
     %QC(i).MPRAGE = tmp; %tmp.img;
     %clear tmp;
-    
-
     % remove?
     %QC(i).MPRAGE=read_4dfpimg_HCP(mprimg{i,1});
     %QC(i).ANATAV=read_4dfpimg_HCP(anataveimg{i,1});
@@ -297,6 +299,8 @@ end
 % Now, using fmriprep output masks and combining the BOLD brain masks into
 % a single union mask to only take voxels that are defined in every
 % analyzed run of a subject
+% CG2: we will save this dfndvoxels into the QC but NOT APPLY it to the
+% data, since these masks tend to be a bit conservative.
 for i=1:numdatas
     QC(i).DFNDVOXELS = create_union_mask(boldmasknii(i,:),QC(i).runs);    
 end
@@ -313,7 +317,7 @@ switch switches.regressiontype
     case {0,1,9} % freesurfer masks of WM and V
         
         display('assuming res02 for all masks now given issues with res saving in fmriprep');
-        display('these masks are not perfect. Check them if you require high accuracy.');
+        %these masks are not perfect. Check them if you require high accuracy.
         
         % set basic names
         for i=1:numdatas
@@ -325,13 +329,10 @@ switch switches.regressiontype
             % conservative one by dilating this one 3x using AFNI:
             % singularity run /projects/b1081/singularity_images/afni_latest.sif 3dmask_tool -input tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz -prefix tpl-MNI152NLin6Asym_res-02_desc-brain_mask_dilate3.nii.gz -dilate_input 3
             % QC(i).GLMmaskfile = ['/projects/b1081/Atlases/templateflow/tpl-' space '/tpl-' space '_res-02_desc-brain_mask.nii.gz'];
-            QC(i).GLMmaskfile = ['/projects/b1081/Atlases/templateflow/tpl-' space '/tpl-' space '_res-02_desc-brain_mask_dilate3.nii.gz'];
+            QC(i).GLMmaskfile = ['/projects/b1081/Atlases/templateflow/tpl-' space '/tpl-' space '_res-02_desc-brain_mask_dilate3.nii.gz']; %CG = primary mask we will use
             
             % need to resample the maskfiles to res02 space 
-            %[used for display, don't need to be perfect]
-            
             fnames = resample_masks(anat_string,QC(i),space);
-            
             QC(i).WMmaskfile = fnames.WMmaskfile;
             QC(i).CSFmaskfile = fnames.CSFmaskfile;
             QC(i).WBmaskfile = fnames.WBmaskfile;
@@ -342,6 +343,7 @@ switch switches.regressiontype
         % check for existence of mask files
         for i=1:numdatas
             fprintf('CHECKING NUISANCE SEEDS\t%d\t%s\n',i,QC(i).subjectID);
+            disp('remember to visually check if nuisance masks at set thresholds look OK.');
             needtostop=0;
             
             if ~exist([QC(i).GLMmaskfile])
@@ -374,25 +376,28 @@ switch switches.regressiontype
             %needtostop=0;
             
             tmpmask=load_untouch_nii_wrapper(QC(i).GLMmaskfile);
-            tmpmask=tmpmask & QC(i).DFNDVOXELS;
+            %tmpmask=tmpmask & QC(i).DFNDVOXELS; %CG - too conservative - don't mask at this stage
             QC(i).GLMMASK=~~tmpmask;
             
             tmpmask = load_untouch_nii_wrapper(QC(i).WBmaskfile);
-            tmpmask=tmpmask & QC(i).DFNDVOXELS;
+            %tmpmask=tmpmask & QC(i).DFNDVOXELS;
             QC(i).WBMASK=~~tmpmask;
             
             tmpmask = load_untouch_nii_wrapper(QC(i).GREYmaskfile);
-            tmpmask = (tmpmask > GMthresh) & QC(i).DFNDVOXELS;
+            %tmpmask = (tmpmask > GMthresh) & QC(i).DFNDVOXELS;
+            tmpmask = (tmpmask > GMthresh);
             QC(i).GMMASK=~~tmpmask;
             QC(i).GMthresh = GMthresh;
             
             tmpmask = load_untouch_nii_wrapper(QC(i).WMmaskfile);
-            tmpmask = (tmpmask > WMthresh) & QC(i).DFNDVOXELS;
+            %tmpmask = (tmpmask > WMthresh) & QC(i).DFNDVOXELS;
+            tmpmask = (tmpmask > WMthresh);
             QC(i).WMMASK=~~tmpmask;
             QC(i).WMthresh = WMthresh;
             
             tmpmask = load_untouch_nii_wrapper(QC(i).CSFmaskfile);
-            tmpmask = (tmpmask > CSFthresh) & QC(i).DFNDVOXELS;
+            %tmpmask = (tmpmask > CSFthresh) & QC(i).DFNDVOXELS;
+            tmpmask = (tmpmask > CSFthresh);
             QC(i).CSFMASK=~~tmpmask;
             QC(i).CSFthresh = CSFthresh;
         end
@@ -668,19 +673,36 @@ for i=1:numdatas %f=1:numdatas
         switch switches.regressiontype
             case {0,1}
                 if switches.GS
-                    sig = QC(i).global_signal;
-                    %sigTEMP=mean(tempimg(QC(i).GLMMASK,:))';
-                        QC(i).sigregs=[QC(i).sigregs sig];
-                        QC(i).siglabels=[QC(i).siglabels {'WB'}];
+                    if strcmp(switches.regress_source,'fmriprep')
+                        sig = QC(i).global_signal;
+                    elseif strcmp(switches.regress_source,'calc')
+                        sig = mean(tempimg(QC(i).GLMMASK_glmmask,:))';
+                    else
+                        error('do no recognize regress_source switch');
+                    end
+                    QC(i).sigregs=[QC(i).sigregs sig];
+                    QC(i).siglabels=[QC(i).siglabels {'WB'}];
                 end
                 if switches.WM
-                    sig = QC(i).white_matter;
+                    if strcmp(switches.regress_source,'fmriprep')
+                        sig = QC(i).white_matter;
+                    elseif strcmp(switches.regress_source,'calc')
+                        sig=mean(tempimg(QC(i).WMMASK_glmmask,:))';
+                    else
+                        error('do no recognize regress_source switch');
+                    end
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'WM'}];
                     
                 end
                 if switches.V
-                    sig = QC(i).csf;
+                    if strcmp(switches.regress_source,'fmriprep')
+                        sig = QC(i).csf;
+                    elseif strcmp(switches.regress_source,'calc')
+                        sig=mean(tempimg(QC(i).CSFMASK_glmmask,:))';
+                    else
+                        error('do no recognize regress_source switch');
+                    end
                         QC(i).sigregs=[QC(i).sigregs sig];
                         QC(i).siglabels=[QC(i).siglabels {'V'}];
                 end
@@ -1491,40 +1513,49 @@ rylimz=[min(rightsignallim) max(rightsignallim)];
 lylimz=[min(leftsignallim) max(leftsignallim)];
 %FDmult = 10; %multiplier to get FD in range of DVARS values
 
-figure('Position',[1 1 1500 1000],'Visible','Off');
+figure('Position',[1 1 1700 1200],'Visible','Off');
 
 % subplot1 = mvm
-subplot(9,1,1:2);
+subplot(10,1,1:2);
 pointindex=1:numpts;
 plot(pointindex,QC.MVM);
 xlim([0 numpts]);
-ylim([-1.5 1.5]);
+ylim([-1 1]);
 ylabel('mvm');
 
-% subplot2 = DVARS, GS, and FD
-subplot(9,1,3:4)
+% subplot2 = GS
+subplot(10,1,3)
 %[h a(1) a(2)]=plotyy(pointindex,QC.DV_GLM(:,stage),pointindex,QC.MEAN_GLM(:,stage));
-[h a(1) a(2)]=plotyy(pointindex,QC.dvars,pointindex,QC.global_signal);
-set(h(1),'xlim',[0 numpts],'ylim',lylimz,'ycolor',[0 0 0],'ytick',leftsignallim);
-ylabel(sprintf('B:DV G:GS R:FD*%d C:fFD*%d',FDmult,FDmult));
-set(a(1),'color',[0 0 1]);
-set(h(2),'xlim',[0 numpts],'ycolor',[0 0 0],'xlim',[0 numel(QC.dvars)],'ylim',rylimz,'ytick',rightsignallim);
-set(a(2),'color',[0 .5 0]);
-axis(h(1)); hold on;
-h3=plot([1:numpts],QC.FD*FDmult,'r');
-h4=plot([1:numpts],QC.fFD*FDmult,'c');
-hold off;
-axes(h(2)); hold(h(2),'on');
+%[h a(1) a(2)]=plotyy(pointindex,QC.dvars,pointindex,QC.global_signal);
+%set(h(1),'xlim',[0 numpts],'ylim',lylimz,'ycolor',[0 0 0],'ytick',leftsignallim);
+%ylabel(sprintf('B:DV G:GS R:FD*%d C:fFD*%d',FDmult,FDmult));
+%set(a(1),'color',[0 0 1]);
+%set(h(2),'xlim',[0 numpts],'ycolor',[0 0 0],'xlim',[0 numel(QC.dvars)],'ylim',rylimz,'ytick',rightsignallim);
+%set(a(2),'color',[0 .5 0]);
+%axis(h(1)); hold on;
+plot(pointindex,QC.global_signal,'g');
 hline(0,'k');
-hold(h(2),'off');
-set(h(1),'children',[a(1) h3 h4]);
-set(h(1),'YaxisLocation','left','box','off');
-set(h(2),'xaxislocation','top','xticklabel','');
+xlim([0 numpts]);
+ylim(rylimz);
+ylabel('G:GS');
+
+% subplot3 = FD
+subplot(10,1,4:5)
+plot([1:numpts],QC.FD,'Color',[1 0.8 0.8],'LineWidth',0.1); hold on;
+plot([1:numpts],QC.fFD,'r','LineWidth',1.5);
+hline(0.1,'k');
+xlim([0 numpts]);
+ylim([0 1])
+ylabel('mm, R:fFD, M=FD');
+% hold(h(2),'off');
+% set(h(1),'children',[a(1) h3 h4]);
+% set(h(1),'YaxisLocation','left','box','off');
+% set(h(2),'xaxislocation','top','xticklabel','');
 
 % subplots 3-4: 
-subplot(9,1,5:8);
+subplot(10,1,6:9);
 imagesc(QC.GMtcs(:,:,stage),rylimz); colormap(gray); ylabel('GRAY');
-subplot(9,1,9);
+subplot(10,1,10);
 imagesc([QC.WMtcs(:,:,stage);QC.CSFtcs(:,:,stage)],rylimz); ylabel('WM CSF');
 
 
