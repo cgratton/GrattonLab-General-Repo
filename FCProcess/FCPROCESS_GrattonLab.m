@@ -50,7 +50,7 @@ space = 'MNI152NLin6Asym';
 res = 'res-2'; %'','res-2' or 'res-3' (voxel resolutions for output)
 %switches.WMero=4; % default erosion for freesurfer WM mask. Check before this that this looks good
 %switches.CSFero=1; % default erosion for freesurfer CSF mask. Check before this that this looks good.
-GMthresh = 0.5; %these and following should only really matter for grayplot
+GMthresh = 0.5; %used for nuis regressors. Check that these (esp WM/CSF look ok; GM mostly used for grayplot)
 WMthresh = 0.95; %only take voxels you're pretty sure are WM/CSF
 CSFthresh = 0.95;
 set(0, 'DefaultFigureVisible', 'off'); % puts figures in the background while running
