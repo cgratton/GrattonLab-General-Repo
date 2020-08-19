@@ -136,17 +136,18 @@ for s = 1:length(dataInfo.sub)
         if ~exist([subfunc_run '.nii.gz'])
             error(['fc-processed subject data ' subfunc_run ' does not exist!']);
         end
-        funcvol_run = [surffuncdir '/' allstart_runs_fstring2{s,r} '_funcvol'];
+        subfunc_run_this = [surffuncdir '/' allstart_runs_fstring2{s,r} '_funcvol'];
         
         %Remove NaNs from the data and copy to new location
-        %evalc(['!niftigz_4dfp -n ' subfunc ' ' funcvol '_temp']); % already nifti
-        %evalc(['!fslmaths ' funcvol '_temp -nan ' funcvol]);
-        %delete([funcvol '_temp']);
-        system(['module load fsl/5.0.8; fslmaths ' subfunc_run ' -nan ' funcvol_run]);
+        %system(['module load fsl/5.0.8; fslmaths ' subfunc_run ' -nan ' subfunc_run_nan]); 
+        % CG - for some reason this command un-mean centers the data, so
+        % commenting out for now. Don't think we have nans?
+        system(['cp ' subfunc_run '.nii.gz ' subfunc_run_this '.nii.gz']);
         
         % CG - made edits to bring goodvoxels out of this loop (see wrapper
         % script above)
         submask = goodvox_fnames{s}; %[goodvoxfolder '/' subject '_goodvoxels.nii.gz'];
+       
         
         
         % Sample volumes to surface, downsample, and smooth
@@ -163,7 +164,7 @@ for s = 1:length(dataInfo.sub)
             %%%% FOR TESTING
             disp(['Hemisphere: ' HEMS{hem}]);
             disp('...mapping data to surface');
-            system([workbenchdir '/wb_command -volume-to-surface-mapping ' funcvol_run '.nii.gz ' midsurf ' ' surffuncdir '/' surfname '.func.gii -ribbon-constrained ' whitesurf ' ' pialsurf ' -volume-roi ' submask]);
+            system([workbenchdir '/wb_command -volume-to-surface-mapping ' subfunc_run_this '.nii.gz ' midsurf ' ' surffuncdir '/' surfname '.func.gii -ribbon-constrained ' whitesurf ' ' pialsurf ' -volume-roi ' submask]);
             
             disp('... dilating surface timecourse');
             system([workbenchdir '/wb_command -metric-dilate ' surffuncdir '/' surfname '.func.gii ' midsurf ' 10 ' surffuncdir '/' surfname '_dil10.func.gii']);
@@ -188,9 +189,9 @@ for s = 1:length(dataInfo.sub)
         
         % Smooth data in volume within mask
         disp('... smothing functional data in volume');        
-        funcvol_run_ROIsmooth = [funcvol_run '_wROI255'];       
-        system([workbenchdir '/wb_command -volume-smoothing ' funcvol_run '.nii.gz ' num2str(smoothnum) ' ' funcvol_run_ROIsmooth '.nii.gz -roi ' subcort_mask]);
-        delete([funcvol_run '.nii.gz'])
+        funcvol_run_ROIsmooth = [subfunc_run_this '_wROI255'];       
+        system([workbenchdir '/wb_command -volume-smoothing ' subfunc_run_this '.nii.gz ' num2str(smoothnum) ' ' funcvol_run_ROIsmooth '.nii.gz -roi ' subcort_mask]);
+        delete([subfunc_run_this '.nii.gz'])
         %delete([funcvol_run '_unprocessed.nii.gz']) - this is associated
         %with goodvoxels wrapper. Delete there? It takes a long time to
         %make.
