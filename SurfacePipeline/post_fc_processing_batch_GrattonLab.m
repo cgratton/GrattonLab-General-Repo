@@ -139,10 +139,10 @@ for s = 1:length(dataInfo.sub)
         subfunc_run_this = [surffuncdir '/' allstart_runs_fstring2{s,r} '_funcvol'];
         
         %Remove NaNs from the data and copy to new location
-        %system(['module load fsl/5.0.8; fslmaths ' subfunc_run ' -nan ' subfunc_run_nan]); 
+        system(['module load fsl/5.0.8; fslmaths ' subfunc_run ' -nan ' subfunc_run_nan]); 
         % CG - for some reason this command un-mean centers the data, so
         % commenting out for now. Don't think we have nans?
-        system(['cp ' subfunc_run '.nii.gz ' subfunc_run_this '.nii.gz']);
+        %system(['cp ' subfunc_run '.nii.gz ' subfunc_run_this '.nii.gz']);
         
         % CG - made edits to bring goodvoxels out of this loop (see wrapper
         % script above)
@@ -180,7 +180,7 @@ for s = 1:length(dataInfo.sub)
             system([Caret5_Command 'caret_command -file-convert -format-convert XML_BASE64 ' surfname_final{hem}]);
             
             delete([surffuncdir '/' surfname '.func.gii']);
-            delete([surffuncdir '/' surfname '_dil10.func.gii']);
+            delete([surffuncdir '/' surfname '_dil10.func.gii']);git
             delete([surffuncdir '/' surfname '_dil10_32k_fs_LR.func.gii']);
         end
 
