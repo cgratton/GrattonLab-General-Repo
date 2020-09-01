@@ -1097,6 +1097,9 @@ for i=1:numdatas %f=1:numdatas
         outdat.img = tempimg_out(:,:,:,tr(i).start(j,1):tr(i).start(j,2));
         out_fname = [QC(i).sessdir_out QC(i).naming_str{j} '_' allends '.nii.gz'];
         outdat.fileprefix = out_fname;
+        outdat.hdr.datatype = 16;
+        outdat.hdr.scl_slope = 0;
+        outdat.hdr.scl_inter = 0;
         save_untouch_nii(outdat,out_fname);
         clear outdat;
     end
