@@ -55,19 +55,8 @@ end
 %-------------------------------------------------------------------------
 
 warning off
-mkdir(outfolder)
-surffuncdir = [outfolder '/surf_timecourses/'];
-ciftidir = [outfolder '/cifti_timeseries_normalwall/'];
-ciftiswdir = [outfolder '/cifti_timeseries_smallwall/'];
-goodvoxfolder = [outfolder '/goodvoxels/'];
-outputdatalistname = [outfolder '/cifti_datalist.txt'];
-outputdatalistname_sw = [outfolder '/cifti_datalist_smallwall.txt'];
-%Make folders
-mkdir(surffuncdir);
-mkdir(ciftidir);
-mkdir(goodvoxfolder);
-if do_smallwall
-    mkdir(ciftiswdir);
+if ~exist(outfolder)
+    mkdir(outfolder)
 end
 
 workbenchdir = '/projects/b1081/Scripts/workbench2/bin_linux64/';
@@ -80,51 +69,75 @@ HEMS = {'L';'R'};
 dataInfo = readtable(datalist); %reads into a table structure, with datafile top row as labels
 numdatas=size(dataInfo.sub,1); %number of datasets to analyses (subs X sessions)
 for i=1:numdatas
+    
+    % reformat sub and run info as needed
+    if isa(dataInfo.sub(i),'cell')
+        subjectID{i} = dataInfo.sub{i}; % the more expected case
+    elseif isa(df.sub(i),'double')  %to account for subject numbers that are all numeric
+        subjectID{i} = num2str(dataInfo.sub(i)); %change to string to work with rest of code
+    else
+        error('can not recognize subject data type')
+    end
     run_nums{i} = str2double(regexp(dataInfo.runs{i},',','split'))'; % get runs, converting to numerical array (other orientiation since that's what's expected
         
     % some useful strings
-    conf_fstring{i} = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',dataInfo.topDir{i},dataInfo.confoundsFolder{i},dataInfo.sub{i},dataInfo.sess(i));
-    preprocdata_fstring{i} = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',dataInfo.topDir{i},dataInfo.dataFolder{i},dataInfo.sub{i},dataInfo.sess(i));
-    allstart_fstring2{i} = sprintf('sub-%s_ses-%d_task-%s',dataInfo.sub{i},dataInfo.sess(i),dataInfo.task{i});
+    conf_fstring{i} = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',dataInfo.topDir{i},dataInfo.confoundsFolder{i},subjectID{i},dataInfo.sess(i));
+    preprocdata_fstring{i} = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',dataInfo.topDir{i},dataInfo.dataFolder{i},subjectID{i},dataInfo.sess(i));
+    allstart_fstring2{i} = sprintf('sub-%s_ses-%d_task-%s',subjectID{i},dataInfo.sess(i),dataInfo.task{i});
     for r = 1:length(run_nums{i})
-        allstart_runs_fstring2{i,r} = sprintf('sub-%s_ses-%d_task-%s_run-%02d',dataInfo.sub{i},dataInfo.sess(i),dataInfo.task{i},run_nums{i}(r));
+        allstart_runs_fstring2{i,r} = sprintf('sub-%s_ses-%d_task-%s_run-%02d',subjectID{i},dataInfo.sess(i),dataInfo.task{i},run_nums{i}(r));
         tmask_names{i,r} = [conf_fstring{i} 'FD_outputs/' allstart_runs_fstring2{i,r} '_desc-tmask_' dataInfo.FDtype{i} '.txt']; %assume this is in confounds folder
-        %preprocdata_names{i,r} = [preprocdata_fstring{i} allstart_runs_fstring2{i,r} '_space-' space '_' res '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
+        preprocdata_names{i,r} = [preprocdata_fstring{i} allstart_runs_fstring2{i,r} '_space-' space '_' res '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
         % TEMP FOR TESTING - changed to exclude res for older version of fmriprep
-        preprocdata_names{i,r} = [preprocdata_fstring{i} allstart_runs_fstring2{i,r} '_space-' space '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
+        %preprocdata_names{i,r} = [preprocdata_fstring{i} allstart_runs_fstring2{i,r} '_space-' space '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
     end
 end
 
 
-prevstring = [];
 
-delete(outputdatalistname);
-fid = fopen(outputdatalistname,'at'); %open the output file for writing
-fclose(fid);
-
-if do_smallwall
-    delete(outputdatalistname_sw);
-    fid = fopen(outputdatalistname_sw,'at'); %open the output file for writing
-    fclose(fid);
-end
-
-
-%%% estimate goodvoxels for each subject
-force_remake_concat = 0; %force remake the concatenated preproc dataset? (Takes long time)
-force_ribbon = 0; %force remake the single subject ribbon (Takes medium time)
-force_goodvoxels = 0; %force remake the goodvoxels mask (Takes medium-short time)
-goodvox_fnames = goodvoxels_wrapper(dataInfo,tmask_names,preprocdata_names,surffuncdir,allstart_fstring2,run_nums,fs_LR_surfdir,goodvoxfolder,...
-    T1name_end,space_short,force_remake_concat,force_ribbon,force_goodvoxels);
 
 for s = 1:length(dataInfo.sub)
     
-    tic;
-    
-    subject = dataInfo.sub{s};  %each line can designate diff sub and sess together so don't need separate loops
+    % subject information
+    subject = subjectID{s};  %each line can designate diff sub and sess together so don't need separate loops
     session = num2str(dataInfo.sess(s));
     TR = dataInfo.TR(s,1);
-    
     disp(['Subject ' subject ', Session: ' session ' CIFTI processing']);
+    
+    % set up subject specific directories
+    surffuncdir = [outfolder 'sub-' subject '/ses-' session '/surf_timecourses/'];
+    ciftidir = [outfolder 'sub-' subject '/ses-' session '/cifti_timeseries_normalwall/'];
+    ciftiswdir = [outfolder 'sub-' subject '/ses-' session '/cifti_timeseries_smallwall/'];
+    goodvoxfolder = [outfolder 'sub-' subject '/ses-' session '/goodvoxels/'];
+    outputdatalistname = [outfolder 'sub-' subject '/ses-' session '/cifti_datalist_' num2str(s) '.txt']; %adding the number here so you don't risk interference across conds
+    outputdatalistname_sw = [outfolder 'sub-' subject '/ses-' session '/cifti_datalist_smallwall_' num2str(s) '.txt']; %adding the number here so you don't risk interference across conds
+    
+    %Make folders
+    mkdir(surffuncdir);
+    mkdir(ciftidir);
+    mkdir(goodvoxfolder);
+    if do_smallwall
+        mkdir(ciftiswdir);
+    end
+    
+    % set up output text files
+    delete(outputdatalistname);
+    fid = fopen(outputdatalistname,'at'); %open the output file for writing
+    fclose(fid);
+    if do_smallwall
+        delete(outputdatalistname_sw);
+        fid = fopen(outputdatalistname_sw,'at'); %open the output file for writing
+        fclose(fid);
+    end
+
+    % calculate goodvoxels
+    goodvox_fname = goodvoxels_wrapper(dataInfo,s,tmask_names,preprocdata_names,surffuncdir,allstart_fstring2,run_nums,fs_LR_surfdir,goodvoxfolder,...
+        T1name_end,space_short,force_remake_concat,force_ribbon,force_goodvoxels);
+
+    % start the actual processing
+    tic;
+    
+    
     funcvol = [surffuncdir '/' allstart_fstring2{s} '_funcvol'];
     
     for r = 1:length(run_nums{s})
@@ -139,16 +152,14 @@ for s = 1:length(dataInfo.sub)
         subfunc_run_this = [surffuncdir '/' allstart_runs_fstring2{s,r} '_funcvol'];
         
         %Remove NaNs from the data and copy to new location
-        system(['module load fsl/5.0.8; fslmaths ' subfunc_run ' -nan ' subfunc_run_nan]); 
+        system(['module load fsl/5.0.8; fslmaths ' subfunc_run ' -nan ' subfunc_run_this]); 
         % CG - for some reason this command un-mean centers the data, so
         % commenting out for now. Don't think we have nans?
         %system(['cp ' subfunc_run '.nii.gz ' subfunc_run_this '.nii.gz']);
         
-        % CG - made edits to bring goodvoxels out of this loop (see wrapper
-        % script above)
-        submask = goodvox_fnames{s}; %[goodvoxfolder '/' subject '_goodvoxels.nii.gz'];
-       
-        
+        % CG - goodvoxels calculated once per sub/sess pairing to increase
+        % SNR
+        submask = goodvox_fname; %[goodvoxfolder '/' subject '_goodvoxels.nii.gz'];        
         
         % Sample volumes to surface, downsample, and smooth
         for hem = 1:2
@@ -161,7 +172,6 @@ for s = 1:length(dataInfo.sub)
             outsphere = [fs_LR_surfdir '/sub-' subject '/' space_short '/fsaverage_LR32k/sub-' subject '.' HEMS{hem} '.sphere.32k_fs_LR.surf.gii'];
             surfname = [allstart_runs_fstring2{s,r} '_' HEMS{hem}];
             
-            %%%% FOR TESTING
             disp(['Hemisphere: ' HEMS{hem}]);
             disp('...mapping data to surface');
             system([workbenchdir '/wb_command -volume-to-surface-mapping ' subfunc_run_this '.nii.gz ' midsurf ' ' surffuncdir '/' surfname '.func.gii -ribbon-constrained ' whitesurf ' ' pialsurf ' -volume-roi ' submask]);
@@ -218,9 +228,9 @@ end
 
 end
 
-function goodvox_fname = goodvoxels_wrapper(dataInfo,tmask_names,preprocdata_names,surffuncdir,allstart_fstring2,run_nums,fsLRfolder,goodvoxfolder,T1name_end,space_short,force_make_concat,force_ribbon,force_goodvoxels)
+function goodvox_fname = goodvoxels_wrapper(dataInfo,s,tmask_names,preprocdata_names,surffuncdir,allstart_fstring2,run_nums,fsLRfolder,goodvoxfolder,T1name_end,space_short,force_make_concat,force_ribbon,force_goodvoxels)
 
-for s = 1:length(dataInfo.sub)
+%for s = 1:length(dataInfo.sub)
     subject = dataInfo.sub{s};  %each line can designate diff sub and sess together so don't need separate loops
     session = dataInfo.sess(s);
     TR = dataInfo.TR(s,1);
@@ -263,12 +273,12 @@ for s = 1:length(dataInfo.sub)
     sequence_name = sprintf('sub-%s_ses-%d_task-%s',subject,session,dataInfo.task{s});
     fsLRfolder_sub = [fsLRfolder '/sub-' subject '/' space_short '/'];
     T1name = ['sub-' subject T1name_end];
-    goodvox_fname{s} = [goodvoxfolder '/' sequence_name '_goodvoxels.nii.gz'];
-    if ~exist(goodvox_fname{s}) || force_goodvoxels
+    goodvox_fname = [goodvoxfolder '/' sequence_name '_goodvoxels.nii.gz'];
+    if ~exist(goodvox_fname) || force_goodvoxels
         goodvoxels_singlesub_GrattonLab(preproc_concat_data_outname, fsLRfolder_sub, goodvoxfolder,subject,sequence_name,T1name,force_ribbon);
     else
         disp('>>> WARNING: using previously calculated goodvoxels map for this sub and sess. To remake, set to force');
     end
     
-end
+%end
 end

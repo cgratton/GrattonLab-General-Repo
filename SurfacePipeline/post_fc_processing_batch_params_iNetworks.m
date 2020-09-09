@@ -68,6 +68,10 @@ res_short = '222';
 %T1name_input_end = ['_desc-preproc_T1w.nii.gz'];
 T1name_end = ['_space-' space '_desc-preproc_T1w.nii.gz']; % T1 name ending
 
+%%% estimate goodvoxels for each subject
+force_remake_concat = 0; %force remake the concatenated preproc dataset? (Takes long time)
+force_ribbon = 0; %force remake the single subject ribbon (Takes medium time)
+force_goodvoxels = 0; %force remake the goodvoxels mask (Takes medium-short time)
 
 
 %-------------------------------------------------------------------------
