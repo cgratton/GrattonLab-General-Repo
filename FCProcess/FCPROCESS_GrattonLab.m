@@ -64,7 +64,17 @@ df = readtable(datafile); %reads into a table structure, with datafile top row a
 numdatas=size(df.sub,1); %number of datasets to analyses (subs X sessions)
 
 for i=1:numdatas
-    QC(i).subjectID = df.sub{i}; %experiment subject ID
+    
+    %experiment subject IDv
+    %QC(i).subjectID = df.sub{i}; 
+    if isa(df.sub(i),'cell')
+        QC(i).subjectID = df.sub{i}; % the more expected case
+    elseif isa(df.sub(i),'double')  %to account for subject numbers that are all numeric
+        QC(i).subjectID = num2str(df.sub(i)); %change to string to work with rest of code
+    else
+        error('can not recognize subject data type')
+    end
+    
     QC(i).session = df.sess(i); %session ID
     QC(i).condition = df.task{i}; %condition type (rest or name of task)
     QC(i).TR = df.TR(i,1); %TR (in seconds)
@@ -73,7 +83,7 @@ for i=1:numdatas
     QC(i).dataFolder = df.dataFolder{i}; % folder for data inputs (assume BIDS style organization otherwise)
     QC(i).confoundsFolder = df.confoundsFolder{i}; % folder for confound inputs (assume BIDS organization)
     QC(i).FDtype = df.FDtype{i,1}; %use FD or fFD for tmask, etc?
-    QC(i).runs = str2double(regexp(df.runs{i},',','split'))'; % get runs, converting to numerical array (other orientiation since that's what's expected
+    QC(i).runs = str2double(regexp(df.runs{i},',','split'))'; % get runs, converting to numerical array (other orientiation since that's what's expected    
     QC(i).space = space;
     QC(i).res = res;
     QC(i).GMthresh = GMthresh;
@@ -239,10 +249,11 @@ for i=1:numdatas
     
     % prepare target session directory
     QC(i).sessdir_out=sprintf('%s/ses-%d/func/',QC(i).subdir_out,QC(i).session);
-    if exist(QC(i).sessdir_out) %remove the directory if it already exists
-        rmdir(QC(i).sessdir_out,'s');
+    if ~exist(QC(i).sessdir_out) %only make it if it doesn't exist to account for running different task types
+        mkdir(QC(i).sessdir_out);
+    else
+        warning('Sess output folder already existed; new results will be added to this folder and mixed');
     end
-    mkdir(QC(i).sessdir_out); %make the directory
     
     % make links to atlas and seed data
     QC(i).subatlasdir_out=[QC(i).subdir_out '/anat/']; %directory with anatomical info CG = changed to BIDS-like
@@ -276,7 +287,8 @@ for i=1:numdatas
 
         all_fstring = sprintf('sub-%s_ses-%d_task-%s_run-%02d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(j));
         QC(i).naming_str{j} = all_fstring; % keep a record of this string
-        
+        QC(i).naming_str_allruns = sprintf('sub-%s_ses-%d_task-%s',QC(i).subjectID,QC(i).session,QC(i).condition);
+         
         tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_desc-preproc_bold.nii.gz'];
         tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_boldref.nii.gz'];
         tboldmasknii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_desc-brain_mask.nii.gz'];
@@ -295,14 +307,15 @@ end
 
 %% COMPUTE DEFINED VOXELS FOR THE BOLD RUNS
 
-% CG edits: this used to use 4dfp compute_defined_4dfp function
+% CG edits: this previously used 4dfp compute_defined_4dfp function
 % Now, using fmriprep output masks and combining the BOLD brain masks into
 % a single union mask to only take voxels that are defined in every
 % analyzed run of a subject
 % CG2: we will save this dfndvoxels into the QC but NOT APPLY it to the
 % data, since these masks tend to be a bit conservative.
 for i=1:numdatas
-    QC(i).DFNDVOXELS = create_union_mask(boldmasknii(i,:),QC(i).runs);    
+    dfnd_name_out = [QC(i).sessdir_out QC(i).naming_str{1}(1:end-7) '_desc-AllRunUnionMask.nii.gz'];
+    QC(i).DFNDVOXELS = create_union_mask(boldmasknii(i,:),QC(i).runs,dfnd_name_out);
 end
 
 
@@ -388,18 +401,30 @@ switch switches.regressiontype
             tmpmask = (tmpmask > GMthresh);
             QC(i).GMMASK=~~tmpmask;
             QC(i).GMthresh = GMthresh;
+            %save this file out for later inspection (add warnings based on
+            %percent voxels too?)
+            outname = [QC(i).sessdir_out QC(i).naming_str_allruns '_desc-GMMASK.nii.gz'];
+            save_out_maskfile(QC(i).GREYmaskfile,QC(i).GMMASK,outname);
             
             tmpmask = load_untouch_nii_wrapper(QC(i).WMmaskfile);
             %tmpmask = (tmpmask > WMthresh) & QC(i).DFNDVOXELS;
             tmpmask = (tmpmask > WMthresh);
             QC(i).WMMASK=~~tmpmask;
             QC(i).WMthresh = WMthresh;
+            %save this file out for later inspection (add warnings based on
+            %percent voxels too?)
+            outname = [QC(i).sessdir_out QC(i).naming_str_allruns '_desc-WMMASK.nii.gz'];
+            save_out_maskfile(QC(i).WMmaskfile,QC(i).WMMASK,outname);
             
             tmpmask = load_untouch_nii_wrapper(QC(i).CSFmaskfile);
             %tmpmask = (tmpmask > CSFthresh) & QC(i).DFNDVOXELS;
             tmpmask = (tmpmask > CSFthresh);
             QC(i).CSFMASK=~~tmpmask;
             QC(i).CSFthresh = CSFthresh;
+            %save this file out for later inspection (add warnings based on
+            %percent voxels too?)
+            outname = [QC(i).sessdir_out QC(i).naming_str_allruns '_desc-CSFMASK.nii.gz'];
+            save_out_maskfile(QC(i).CSFmaskfile,QC(i).CSFMASK,outname);
         end
         
  
@@ -1860,24 +1885,34 @@ function switches = get_input_from_user()
         end
     end
     
-function dfndvoxels = create_union_mask(boldmasknii,runs)
+function dfndvoxels = create_union_mask(boldmasknii,runs,outname)
 for r = 1:length(runs)
     tmp = load_untouch_nii_wrapper(boldmasknii{r});
-    
     if r > 1
         dfndvoxels = tmp .* dfndvoxels; % multiply masks together to only get locations passing all masks
+        clear tmp;
     elseif r == 1
         dfndvoxels = tmp;
     end
-    
-    clear tmp
-    
 end
+
+%save out this mask
+save_out_maskfile(boldmasknii{1},dfndvoxels,outname);
+
+
+function save_out_maskfile(input_template,out_data,outname)
+
+outfile = load_untouch_nii(input_template); % for header info
+img_dims = size(outfile.img);
+outfile.img = reshape(out_data,img_dims);
+outfile.prefix = outname;
+save_untouch_nii(outfile,outname);
+
 
 function fnames = resample_masks(anat_string,QC,space)
 
 type_names = {'WM','CSF','WB','GREY'};
-types = {'label-WM_probseg','label-CSF_probseg','label-GM_probseg','desc-brain_mask'};
+types = {'label-WM_probseg','label-CSF_probseg','desc-brain_mask','label-GM_probseg'};
 
 %system('module load singularity/latest');
 currentDir = pwd;
