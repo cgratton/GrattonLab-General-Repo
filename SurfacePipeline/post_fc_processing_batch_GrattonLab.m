@@ -190,7 +190,7 @@ for s = 1:length(dataInfo.sub)
             system([Caret5_Command 'caret_command -file-convert -format-convert XML_BASE64 ' surfname_final{hem}]);
             
             delete([surffuncdir '/' surfname '.func.gii']);
-            delete([surffuncdir '/' surfname '_dil10.func.gii']);git
+            delete([surffuncdir '/' surfname '_dil10.func.gii']);
             delete([surffuncdir '/' surfname '_dil10_32k_fs_LR.func.gii']);
         end
 
