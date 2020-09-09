@@ -21,7 +21,16 @@ numdatas=size(df.sub,1); %number of datasets to analyses (subs X sessions)
 
 % organize for easier use
 for i = 1:numdatas
-    subInfo(i).subjectID = df.sub{i}; %experiment subject ID
+    
+    % reformat sub and run info as needed
+    if isa(dataInfo.sub(i),'cell')
+        subInfo(i).subjectID = dataInfo.sub{i}; % the more expected case
+    elseif isa(df.sub(i),'double')  %to account for subject numbers that are all numeric
+        subInfo(i).subjectID = num2str(dataInfo.sub(i)); %change to string to work with rest of code
+    else
+        error('can not recognize subject data type')
+    end
+    
     subInfo(i).session = df.sess(i); %session ID
     subInfo(i).condition = df.task{i}; %condition type (rest or name of task)
     subInfo(i).TR = df.TR(i,1); %TR (in seconds)
