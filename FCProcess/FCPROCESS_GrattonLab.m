@@ -89,6 +89,13 @@ for i=1:numdatas
     QC(i).GMthresh = GMthresh;
     QC(i).WMthresh = WMthresh;
     QC(i).CSFthresh = CSFthresh;
+    
+    % to address potential residuals feild (to indicate residuals for task FC)
+    if ismember('residuals',df.Properties.VariableNames)
+        QC(i).residuals = df.residuals(i);
+    else
+        QC(i).residuals = 0; % assume these are not residuals if the field doesn't exist
+    end
 end
 
 %% CHECK TEMPORAL MASKS
@@ -101,7 +108,11 @@ for i = 1:numdatas
         conf_fstring1 = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',QC(i).topDir,QC(i).confoundsFolder,QC(i).subjectID,QC(i).session);
         all_fstring2 = sprintf('sub-%s_ses-%d_task-%s_run-%02d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(r));
         
-        bolddata_fname = [data_fstring1 all_fstring2 '_space-' space '_' res '_desc-preproc_bold.nii.gz']; %name may differ for afni outputs?
+        if QC(i).residuals == 0 % the typical case
+            bolddata_fname = [data_fstring1 all_fstring2 '_space-' space '_' res '_desc-preproc_bold.nii.gz'];
+        else %if these are task FC that have been residualized
+            bolddata_fname = [data_fstring1 all_fstring2 '_space-' space '_' res '_desc-preproc_bold_residuals.nii.gz'];
+        end
         boldavg_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_boldref.nii.gz']; %referent for alignment
         boldmask_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_desc-brain_mask.nii.gz']; %fmriprep mask
         confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_regressors.tsv']; %if using the fmriprep regressor
@@ -438,8 +449,6 @@ switch switches.regressiontype
 end
 
 
-
-
 %% CALCULATE SUBJECT MOVEMENT
 for i=1:numdatas
     for j=1:size(QC(i).runs,1)
@@ -586,9 +595,20 @@ for i=1:numdatas %f=1:numdatas
     
     
     
-    % obtain the raw images
+    % obtain the raw images (and mode 1000 normalize them)
     %[tempimg]=bolds2img(bolds,tr(i).tot,tr(i).start,QC(i).GLMMASK);
-    tempimg = bolds2mat(bolds,tr(i).tot,tr(i).start,QC(i).GLMMASK);
+    tempimg = bolds2mat(bolds,tr(i).tot,tr(i).start,QC(i).GLMMASK,QC(i).WBMASK);
+    
+    % save out average raw image for SNR mask later
+    tempimg_avg = zeros(size(QC(i).GLMMASK));
+    tempimg_avg(logical(QC(i).GLMMASK)) = squeeze(mean(tempimg,2));
+    outSNR = [QC(i).sessdir_out QC(i).naming_str_allruns '_desc-mode1000_mean.nii.gz'];
+    outfile = load_untouch_nii([bolds{1} '.nii.gz']); % for header info
+    img_dims = size(outfile.img);
+    img_dims(4) = 1; % this is only a mask, no temporal data
+    outfile.img = reshape(tempimg_avg,img_dims);
+    outfile.prefix = outSNR;    
+    save_untouch_nii(outfile,outSNR);
     
     
     %QC = tempimgsignals(QC,i,tempimg,switches,stage); % CG - do we need this?
@@ -1122,7 +1142,8 @@ for i=1:numdatas %f=1:numdatas
         outdat.img = tempimg_out(:,:,:,tr(i).start(j,1):tr(i).start(j,2));
         out_fname = [QC(i).sessdir_out QC(i).naming_str{j} '_' allends '.nii.gz'];
         outdat.fileprefix = out_fname;
-        outdat.hdr.dime.datatype = 16;
+        outdat.hdr.dime.datatype = 8;
+        outdat.hdr.dime.bitpix = 32;
         outdat.hdr.dime.scl_slope = 0;
         outdat.hdr.dime.scl_inter = 0;
         save_untouch_nii(outdat,out_fname);
@@ -1180,7 +1201,7 @@ system('rm tmpAB');
 % end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [fcimg]=bolds2mat(bolds,trtot,trborders,GLMmask)
+function [fcimg]=bolds2mat(bolds,trtot,trborders,GLMmask,WMmask_sub)
 
 vox = nnz(GLMmask);
 %vox=902629;%147456;
@@ -1189,9 +1210,25 @@ for j=1:size(bolds,2)
     temp = load_untouch_nii_wrapper([bolds{j} '.nii.gz']);
     %temp = read_4dfpimg_HCP(bolds{j,1});
     %    fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
-    fcimg(:,trborders(j,1):trborders(j,2))=temp(logical(GLMmask),:);
-    clear temp;
+    
+    %CG added, based on BK code, based on EMG code
+    temp1000 = mode1000norm(temp,WBmask_sub); % use the more sub specific mask for this
+   
+    fcimg(:,trborders(j,1):trborders(j,2))=temp1000(logical(GLMmask),:);
+    clear temp temp1000;
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function bolddat1000 = mode1000norm(bolddat,bmask)
+
+bolddat_masked = bolddat(bmask,:);
+bolddat_masked = bolddat_masked(bolddat_masked > 0); %note: EMG code had an additional mask > 100 applied. Took out since didn't seem needed?
+[counts,edges] = histcounts(bolddat_masked,1000);
+[~,maxind] = max(counts);
+modeval = mean([edges(maxind) edges(maxind+1)]);
+
+% change bold data to have mode 1000
+bolddat1000 = bolddat + (1000 - modeval);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1901,7 +1938,6 @@ save_out_maskfile(boldmasknii{1},dfndvoxels,outname);
 
 
 function save_out_maskfile(input_template,out_data,outname)
-
 outfile = load_untouch_nii(input_template); % for header info
 img_dims = size(outfile.img);
 outfile.img = reshape(out_data,img_dims);
