@@ -603,13 +603,15 @@ for i=1:numdatas %f=1:numdatas
     tempimg_avg = zeros(size(QC(i).GLMMASK));
     tempimg_avg(logical(QC(i).GLMMASK)) = squeeze(mean(tempimg,2));
     outSNR = [QC(i).sessdir_out QC(i).naming_str_allruns '_desc-mode1000_mean.nii.gz'];
-    outfile = load_untouch_nii([bolds{1} '.nii.gz']); % for header info
+    outfile = load_nii([bolds{1} '.nii.gz']); % for header info
     img_dims = size(outfile.img);
     img_dims(4) = 1; % this is only a mask, no temporal data
     outfile.img = reshape(tempimg_avg,img_dims);
-    outfile.prefix = outSNR;    
-    save_untouch_nii(outfile,outSNR);
+    outfile.prefix = outSNR;   
+    outfile.hdr.dime.dim(2:5) = img_dims;
+    save_nii(outfile,outSNR);
     
+    error('stop here and check SNR mask after dtype issues solved');
     
     %QC = tempimgsignals(QC,i,tempimg,switches,stage); % CG - do we need this?
     QC = nuissignals(QC,i,tboldconf(i,:));
@@ -1201,7 +1203,7 @@ system('rm tmpAB');
 % end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [fcimg]=bolds2mat(bolds,trtot,trborders,GLMmask,WMmask_sub)
+function [fcimg]=bolds2mat(bolds,trtot,trborders,GLMmask,WBmask_sub)
 
 vox = nnz(GLMmask);
 %vox=902629;%147456;
