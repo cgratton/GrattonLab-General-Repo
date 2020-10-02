@@ -610,9 +610,7 @@ for i=1:numdatas %f=1:numdatas
     outfile.prefix = outSNR;   
     outfile.hdr.dime.dim(2:5) = img_dims;
     save_nii(outfile,outSNR);
-    
-    error('stop here and check SNR mask after dtype issues solved');
-    
+        
     %QC = tempimgsignals(QC,i,tempimg,switches,stage); % CG - do we need this?
     QC = nuissignals(QC,i,tboldconf(i,:));
     
@@ -1219,7 +1217,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function bolddat1000 = mode1000norm(bolddat,bmask)
 
-bolddat_masked = bolddat(bmask,:);
+bolddat_masked = double(bolddat(bmask,:));
 bolddat_masked = bolddat_masked(bolddat_masked > 0); %note: EMG code had an additional mask > 100 applied. Took out since didn't seem needed?
 [counts,edges] = histcounts(bolddat_masked,1000);
 [~,maxind] = max(counts);
