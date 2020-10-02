@@ -267,7 +267,7 @@ for i=1:numdatas
     
     % CG - not in correct space. Do we need it?
     % load in MPRAGE 
-    %tmp = load_untouch_nii_wrapper(tmprnii{i,1});
+    %tmp = load_nii_wrapper(tmprnii{i,1});
     %QC(i).MPRAGE = tmp; %tmp.img;
     %clear tmp;
     % remove?
@@ -388,15 +388,15 @@ switch switches.regressiontype
         for i=1:numdatas
             %needtostop=0;
             
-            tmpmask=load_untouch_nii_wrapper(QC(i).GLMmaskfile);
+            tmpmask=load_nii_wrapper(QC(i).GLMmaskfile);
             %tmpmask=tmpmask & QC(i).DFNDVOXELS; %CG - too conservative - don't mask at this stage
             QC(i).GLMMASK=~~tmpmask;
             
-            tmpmask = load_untouch_nii_wrapper(QC(i).WBmaskfile);
+            tmpmask = load_nii_wrapper(QC(i).WBmaskfile);
             %tmpmask=tmpmask & QC(i).DFNDVOXELS;
             QC(i).WBMASK=~~tmpmask;
             
-            tmpmask = load_untouch_nii_wrapper(QC(i).GREYmaskfile);
+            tmpmask = load_nii_wrapper(QC(i).GREYmaskfile);
             %tmpmask = (tmpmask > GMthresh) & QC(i).DFNDVOXELS;
             tmpmask = (tmpmask > GMthresh);
             QC(i).GMMASK=~~tmpmask;
@@ -406,7 +406,7 @@ switch switches.regressiontype
             outname = [QC(i).sessdir_out QC(i).naming_str_allruns '_desc-GMMASK.nii.gz'];
             save_out_maskfile(QC(i).GREYmaskfile,QC(i).GMMASK,outname);
             
-            tmpmask = load_untouch_nii_wrapper(QC(i).WMmaskfile);
+            tmpmask = load_nii_wrapper(QC(i).WMmaskfile);
             %tmpmask = (tmpmask > WMthresh) & QC(i).DFNDVOXELS;
             tmpmask = (tmpmask > WMthresh);
             QC(i).WMMASK=~~tmpmask;
@@ -416,7 +416,7 @@ switch switches.regressiontype
             outname = [QC(i).sessdir_out QC(i).naming_str_allruns '_desc-WMMASK.nii.gz'];
             save_out_maskfile(QC(i).WMmaskfile,QC(i).WMMASK,outname);
             
-            tmpmask = load_untouch_nii_wrapper(QC(i).CSFmaskfile);
+            tmpmask = load_nii_wrapper(QC(i).CSFmaskfile);
             %tmpmask = (tmpmask > CSFthresh) & QC(i).DFNDVOXELS;
             tmpmask = (tmpmask > CSFthresh);
             QC(i).CSFMASK=~~tmpmask;
@@ -1108,7 +1108,7 @@ for i=1:numdatas %f=1:numdatas
     %cd(QC(i).subdir);
     tempimg_out = zeros(size(QC(i).GLMMASK,1),size(tempimg,2)); %Put back in volume space
     tempimg_out(logical(QC(i).GLMMASK),:) = tempimg;
-    tmpavg = load_untouch_nii(tboldavgnii{i,1}); 
+    tmpavg = load_nii(tboldavgnii{i,1}); 
     d = size(tmpavg.img);
     dims_bold = [d(1) d(2) d(3) size(tempimg,2)];
     tempimg_out = reshape(tempimg_out,dims_bold);
@@ -1118,14 +1118,11 @@ for i=1:numdatas %f=1:numdatas
     %write_4dfpifh([ QC(i).vcnum '_' allends '.4dfp.img'],size(tempimg_out,2),'bigendian');
     % save a separate file for each run so not too huge
     for j = 1:length(QC(i).runs)
-        outdat = load_untouch_nii(tboldnii{i,j});
+        outdat = load_nii(tboldnii{i,j});
         outdat.img = tempimg_out(:,:,:,tr(i).start(j,1):tr(i).start(j,2));
         out_fname = [QC(i).sessdir_out QC(i).naming_str{j} '_' allends '.nii.gz'];
         outdat.fileprefix = out_fname;
-        outdat.hdr.dime.datatype = 16;
-        outdat.hdr.dime.scl_slope = 0;
-        outdat.hdr.dime.scl_inter = 0;
-        save_untouch_nii(outdat,out_fname);
+        save_nii(outdat,out_fname);
         clear outdat;
     end
     
@@ -1186,7 +1183,7 @@ vox = nnz(GLMmask);
 %vox=902629;%147456;
 fcimg=zeros(vox,trtot);
 for j=1:size(bolds,2)
-    temp = load_untouch_nii_wrapper([bolds{j} '.nii.gz']);
+    temp = load_nii_wrapper([bolds{j} '.nii.gz']);
     %temp = read_4dfpimg_HCP(bolds{j,1});
     %    fcimg(:,trborders(j,1):trborders(j,2))=read_4dfpimg_HCP(bolds{j,1});
     fcimg(:,trborders(j,1):trborders(j,2))=temp(logical(GLMmask),:);
@@ -1328,7 +1325,7 @@ function [tempbold tempbetas] = demean_detrend(img,varargin)
 
 if ~isnumeric(img)
     %[tempbold]=read_4dfpimg_HCP(img); % read image
-    tempbold = load_untouch_nii_wrapper(img);
+    tempbold = load_nii_wrapper(img);
     %tempbold = tempbold.img;
 else
     [tempbold]=img;
@@ -1887,7 +1884,7 @@ function switches = get_input_from_user()
     
 function dfndvoxels = create_union_mask(boldmasknii,runs,outname)
 for r = 1:length(runs)
-    tmp = load_untouch_nii_wrapper(boldmasknii{r});
+    tmp = load_nii_wrapper(boldmasknii{r});
     if r > 1
         dfndvoxels = tmp .* dfndvoxels; % multiply masks together to only get locations passing all masks
         clear tmp;
@@ -1902,11 +1899,11 @@ save_out_maskfile(boldmasknii{1},dfndvoxels,outname);
 
 function save_out_maskfile(input_template,out_data,outname)
 
-outfile = load_untouch_nii(input_template); % for header info
+outfile = load_nii(input_template); % for header info
 img_dims = size(outfile.img);
 outfile.img = reshape(out_data,img_dims);
 outfile.prefix = outname;
-save_untouch_nii(outfile,outname);
+save_nii(outfile,outname);
 
 
 function fnames = resample_masks(anat_string,QC,space)
