@@ -1226,7 +1226,7 @@ upper_75 = edges(maxind+250); %since 1000 bins
 lower_25 = edges(maxind-250);
 
 % add a range normalization step for NU to make it look more like MSC
-bolddat_norm = (bolddat - lower_25)/(upper_75 - lower_25) .* 300; %MSC range seemed ~between 900 and 1200
+bolddat_norm = (bolddat - lower_25)/(upper_75 - lower_25) .* 650; %MSC range seemed ~between 900 and 1200
 
 % recalculate mode after normalization
 bolddat_norm_masked = double(bolddat_norm(bmask,:));
