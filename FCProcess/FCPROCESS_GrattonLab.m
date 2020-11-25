@@ -51,7 +51,7 @@ res = 'res-2'; %'','res-2' or 'res-3' (voxel resolutions for output)
 %switches.WMero=4; % default erosion for freesurfer WM mask. Check before this that this looks good
 %switches.CSFero=1; % default erosion for freesurfer CSF mask. Check before this that this looks good.
 GMthresh = 0.5; %used for nuis regressors. Check that these (esp WM/CSF look ok; GM mostly used for grayplot)
-WMthresh = 0.95; %only take voxels you're pretty sure are WM/CSF
+WMthresh = 0.9; %thresholded prior to FCprocess (make_fs_masks script), but keeping for QC variable
 CSFthresh = 0.95;
 set(0, 'DefaultFigureVisible', 'off'); % puts figures in the background while running
 
@@ -106,7 +106,7 @@ for i = 1:numdatas
     for r = 1:length(QC(i).runs) % loop through runs (may not be continuous)
         data_fstring1 = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',QC(i).topDir,QC(i).dataFolder,QC(i).subjectID,QC(i).session);
         conf_fstring1 = sprintf('%s/%s/fmriprep/sub-%s/ses-%d/func/',QC(i).topDir,QC(i).confoundsFolder,QC(i).subjectID,QC(i).session);
-        all_fstring2 = sprintf('sub-%s_ses-%d_task-%s_run-%02d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(r));
+        all_fstring2 = sprintf('sub-%s_ses-%d_task-%s_run-%d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(r));
         
         if QC(i).residuals == 0 % the typical case
             bolddata_fname = [data_fstring1 all_fstring2 '_space-' space '_' res '_desc-preproc_bold.nii.gz'];
@@ -115,7 +115,7 @@ for i = 1:numdatas
         end
         boldavg_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_boldref.nii.gz']; %referent for alignment
         boldmask_fname = [conf_fstring1 all_fstring2 '_space-' space '_' res '_desc-brain_mask.nii.gz']; %fmriprep mask
-        confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_regressors.tsv']; %if using the fmriprep regressor
+        confounds_fname = [conf_fstring1 all_fstring2 '_desc-confounds_timeseries.tsv']; %if using the fmriprep regressor
         tmask_fname = [conf_fstring1 'FD_outputs/' all_fstring2 '_desc-tmask_' QC(i).FDtype '.txt']; %assume this is in confounds folder
         
         %boldmat{i,j} = []; %cell2mat(strcat(df.filepath{i,1},'/motion_params/',QC(i).vcnum,'_b',task,QC(i).restruns(j,:),'_faln_dbnd_xr3d.mat')); - EDIT
@@ -273,7 +273,7 @@ for i=1:numdatas
     end
     
     % set symbolic link to MPRAGE data
-    tmprnii{i,1} = [QC(i).subatlasdir_out '/sub-' QC(i).subjectID '_space-' space res '_desc-preproc_T1w.nii.gz'];
+    tmprnii{i,1} = [QC(i).subatlasdir_out '/sub-' QC(i).subjectID '_space-' space '_' res '_desc-preproc_T1w.nii.gz'];
     system([ 'ln -s ' mprnii{i,1} ' ' tmprnii{i,1}]);
     
     % CG - not in correct space. Do we need it?
@@ -296,14 +296,14 @@ for i=1:numdatas
 %         end
 %         cd(QC(i).subbolddir{j});
 
-        all_fstring = sprintf('sub-%s_ses-%d_task-%s_run-%02d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(j));
+        all_fstring = sprintf('sub-%s_ses-%d_task-%s_run-%d',QC(i).subjectID,QC(i).session,QC(i).condition,QC(i).runs(j));
         QC(i).naming_str{j} = all_fstring; % keep a record of this string
         QC(i).naming_str_allruns = sprintf('sub-%s_ses-%d_task-%s',QC(i).subjectID,QC(i).session,QC(i).condition);
          
         tboldnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_desc-preproc_bold.nii.gz'];
         tboldavgnii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_boldref.nii.gz'];
         tboldmasknii{i,j} = [QC(i).sessdir_out all_fstring '_space-' space '_' res '_desc-brain_mask.nii.gz'];
-        tboldconf{i,j} = [QC(i).sessdir_out all_fstring '_desc-confounds_regressors.tsv'];
+        tboldconf{i,j} = [QC(i).sessdir_out all_fstring '_desc-confounds_timeseries.tsv'];
         tboldmot_folder{i,j} = [QC(i).sessdir_out 'FD_outputs'];
 
         system(['ln -s ' boldnii{i,j} ' ' tboldnii{i,j}]);
@@ -357,7 +357,7 @@ switch switches.regressiontype
             
             % need to resample the maskfiles to res02 space 
             fnames = resample_masks(anat_string,QC(i),space);
-            QC(i).WMmaskfile = fnames.WMmaskfile;
+            QC(i).WMmaskfile = [anat_string '/sub-' QC(i).subjectID '_space-' space '_label-WM_probseg_0.9mask_res-2_ero2.nii.gz']; %AD - replacing probseg file with output of make_fs_masks.m 
             QC(i).CSFmaskfile = fnames.CSFmaskfile;
             QC(i).WBmaskfile = fnames.WBmaskfile;
             QC(i).GREYmaskfile = fnames.GREYmaskfile;
@@ -375,7 +375,7 @@ switch switches.regressiontype
                 needtostop=1;
             end            
             if ~exist(QC(i).WBmaskfile)
-                fprintf('WMmaskfile: %s missing!\n',QC(i).WBmaskfile);
+                fprintf('WBmaskfile: %s missing!\n',QC(i).WBmaskfile);
                 needtostop=1;
             end
             if ~exist(QC(i).GREYmaskfile)
@@ -383,7 +383,7 @@ switch switches.regressiontype
                 needtostop=1;
             end
             if ~exist(QC(i).WMmaskfile)
-                fprintf('WMmaskfile: %s missing!\n',QC(i).WMmaskfile);
+                fprintf('WMmaskfile: %s missing! Check make_fs_masks output.\n',QC(i).WMmaskfile);
                 needtostop=1;
             end
             if ~exist(QC(i).CSFmaskfile)
@@ -419,7 +419,7 @@ switch switches.regressiontype
             
             tmpmask = load_nii_wrapper(QC(i).WMmaskfile);
             %tmpmask = (tmpmask > WMthresh) & QC(i).DFNDVOXELS;
-            tmpmask = (tmpmask > WMthresh);
+            % tmpmask = (tmpmask > WMthresh); % AD - commenting out; we now input an already-thresholded/binarized version
             QC(i).WMMASK=~~tmpmask;
             QC(i).WMthresh = WMthresh;
             %save this file out for later inspection (add warnings based on
@@ -454,7 +454,7 @@ for i=1:numdatas
     for j=1:size(QC(i).runs,1)
         
         %cd(QC(i).subbolddir{j});
-        fprintf('LOADING MOTION\t%d\tsub-%s\tsess-%02d\trun-%02d\n',i,QC(i).subjectID,QC(i).session,QC(i).runs(j));
+        fprintf('LOADING MOTION\t%d\tsub-%s\tsess-%d\trun-%d\n',i,QC(i).subjectID,QC(i).session,QC(i).runs(j));
         
         % load motion and alignment estimates from FD folder
         mvm{i,j} = table2array(readtable([tboldmot_folder{i,j} '/' QC(i).naming_str{j} '_desc-mvm.txt']));        
@@ -1955,8 +1955,8 @@ save_nii(outfile,outname);
 
 function fnames = resample_masks(anat_string,QC,space)
 
-type_names = {'WM','CSF','WB','GREY'};
-types = {'label-WM_probseg','label-CSF_probseg','desc-brain_mask','label-GM_probseg'};
+type_names = {'CSF','WB','GREY'}; % AD - removed WM mask resampling; using make_fs_masks.m output {'WM','CSF','WB','GREY'}
+types = {'label-CSF_probseg','desc-brain_mask','label-GM_probseg'}; %{'label-WM_probseg','label-CSF_probseg','desc-brain_mask','label-GM_probseg'}
 
 %system('module load singularity/latest');
 currentDir = pwd;
@@ -1964,7 +1964,7 @@ cd(anat_string);
 
 for t = 1:length(types)
     
-    thisName = ['sub-' QC.subjectID '_space-' space '_res-02_' types{t} '.nii.gz'];
+    thisName = ['sub-' QC.subjectID '_space-' space '_res-2_' types{t} '.nii.gz'];
     thisName_orig = ['sub-' QC.subjectID '_space-' space '_' types{t} '.nii.gz'];
     fnames.([type_names{t} 'maskfile']) = [anat_string thisName];
     
@@ -2044,8 +2044,3 @@ H = sin(prod) * s + cos(prod) * c;
 
 % normalize the reconstructed spectrum, needed when ofac > 1
 H = H * diag(std(h) ./ std(H));
-
-
-
-
-    

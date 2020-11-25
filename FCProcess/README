@@ -13,7 +13,8 @@ Then, to run:
 - In matlab window,run a startup script that links to other relevant files (load_untouch_nii) in the CIFTI resources folder before starting. 
 See my /home/cgv5452/startup.m for example
 > startup
-- Then navigate to your github repo location and run FCPROCESS script. Example:
+- Then navigate to your github repo location and run make_fs_masks and FCPROCESS script. Examples:
+> make_fs_masks('INET003','/projects/b1081/iNetworks/Nifti/derivatives/preproc_fmriprep-20.2.0')
 > FCPROCESS_GrattonLab('EXAMPLESUB_DATALIST.xlsx','/projects/b1081/iNetworks/Nifti/derivatives/preproc_FCProc/','defaults2');
 
 

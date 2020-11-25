@@ -73,8 +73,9 @@ for i = 1:numdatas
         % load motion data
         % assume fmriprep data organization
         %confounds = bids.util.tsvread([inputdir infiles(i).name]); %reads into a structure, each field = col in tsv
-        run_str = sprintf('sub-%s_ses-%d_task-%s_run-%02d',df.sub{i},df.sess(i),df.task{i},runs(r));
-        confounds = bids.util.tsvread([inputdir run_str '_desc-confounds_regressors.tsv']); %reads into a structure, each field = col in tsv
+%         run_str = sprintf('sub-%s_ses-%d_task-%s_run-%02d',df.sub{i},df.sess(i),df.task{i},runs(r));
+        run_str = sprintf('sub-%s_ses-%d_task-%s_run-%d',df.sub{i},df.sess(i),df.task{i},runs(r));
+        confounds = bids.util.tsvread([inputdir run_str '_desc-confounds_timeseries.tsv']); %reads into a structure, each field = col in tsv
         
         % str for naming output (contains subject, task, and run info):
         %run_str = infiles(i).name(1:end-length(input_filestr));
@@ -204,5 +205,3 @@ xlabel('TR');
 ylabel('mm');
 
 end
-
-
