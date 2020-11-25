@@ -7,8 +7,9 @@ Main processing stream:
 2. Run motion metrics code (motion_calc_utilities), check, and update QC document. (datalist must be made first)
 
 [if doing functional connectivity analyses] 
-A3. Run FCPRocess folder code (FCprocess_GrattonLab then fcimage_corrmat_volume). Check outputs and update QC document.
-A4. Run Surface Pipeline code (PostFreeSurferPipeline then post_fc_processing_batch_GrattonLab code). Check outputs (possibly creating a dconn with make_dconn) and update QC document.
+A3. Run make_fs_masks to erode WM masks used in FCprocess.
+A4. Run FCPRocess folder code (FCprocess_GrattonLab then fcimage_corrmat_volume). Check outputs and update QC document.
+A5. Run Surface Pipeline code (PostFreeSurferPipeline then post_fc_processing_batch_GrattonLab code). Check outputs (possibly creating a dconn with make_dconn) and update QC document.
 
 [if doing task fMRI analyses]
 B3. Run code in taskproc folder
